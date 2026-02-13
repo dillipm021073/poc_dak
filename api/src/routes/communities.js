@@ -363,6 +363,55 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Get community members (admin only)
+router.get('/:id/members', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const pool = req.app.locals.pool;
+
+  try {
+    // Verify admin
+    const adminCheck = await pool.query(
+      `SELECT id FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [id, req.user.userId]
+    );
+
+    if (adminCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const result = await pool.query(
+      `SELECT u.id, u.name, u.email, u.created_at as user_created_at,
+              cm.joined_via, cm.created_at as joined_at,
+              aca.access_expires_at,
+              CASE
+                WHEN aca.access_expires_at > NOW() THEN true
+                ELSE false
+              END as has_active_access
+       FROM community_memberships cm
+       JOIN users u ON u.id = cm.user_id
+       LEFT JOIN active_community_access aca ON aca.user_id = u.id AND aca.community_id = cm.community_id
+       WHERE cm.community_id = $1 AND u.role = 'user'
+       ORDER BY cm.created_at DESC`,
+      [id]
+    );
+
+    const members = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      joinedAt: row.joined_at,
+      joinedVia: row.joined_via,
+      hasActiveAccess: row.has_active_access,
+      accessExpiresAt: row.access_expires_at
+    }));
+
+    res.json(members);
+  } catch (err) {
+    console.error('Get members error:', err);
+    res.status(500).json({ error: 'Failed to get members' });
+  }
+});
+
 // Get community analytics (admin only)
 router.get('/:id/analytics', authenticateToken, async (req, res) => {
   const { id } = req.params;

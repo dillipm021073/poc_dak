@@ -183,7 +183,7 @@ router.get('/my-access', authenticateToken, async (req, res) => {
 
 // Initiate payment (redirect to PSP - Stripe)
 router.post('/activate', authenticateToken, async (req, res) => {
-  const { communityId, amount } = req.body;
+  const { communityId, amount, donationMethod, comment } = req.body;
   const pool = req.app.locals.pool;
 
   try {
@@ -195,7 +195,7 @@ router.post('/activate', authenticateToken, async (req, res) => {
 
     // Check membership
     const membershipResult = await pool.query(
-      `SELECT cm.id, c.community_type 
+      `SELECT cm.id, c.community_type
        FROM community_memberships cm
        JOIN communities c ON c.id = cm.community_id
        WHERE cm.community_id = $1 AND cm.user_id = $2`,
@@ -211,11 +211,13 @@ router.post('/activate', authenticateToken, async (req, res) => {
     const { feePercent, feeAmount } = await calculatePlatformFee(pool, communityId, paymentAmount);
 
     // Create pending payment record
+    const method = donationMethod || 'card';
+    const trimmedComment = comment ? comment.trim().slice(0, 500) : null;
     const paymentResult = await pool.query(
-      `INSERT INTO payments (user_id, community_id, amount, days_granted, platform_fee, platform_fee_percent, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+      `INSERT INTO payments (user_id, community_id, amount, days_granted, donation_method, comment, platform_fee, platform_fee_percent, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
        RETURNING id`,
-      [req.user.userId, communityId, paymentAmount, daysGranted, feeAmount, feePercent]
+      [req.user.userId, communityId, paymentAmount, daysGranted, method, trimmedComment, feeAmount, feePercent]
     );
 
     const paymentId = paymentResult.rows[0].id;
@@ -359,7 +361,31 @@ router.post('/mock-complete/:paymentId', authenticateToken, async (req, res) => 
   }
 });
 
-// Get payment history
+// Get all payment history for user (across all communities)
+router.get('/payments', authenticateToken, async (req, res) => {
+  const pool = req.app.locals.pool;
+
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.amount, p.currency, p.status, p.days_granted,
+              p.donation_method, p.comment, p.created_at,
+              c.name as community_name, c.id as community_id
+       FROM payments p
+       JOIN communities c ON c.id = p.community_id
+       WHERE p.user_id = $1
+       ORDER BY p.created_at DESC
+       LIMIT 50`,
+      [req.user.userId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get all payments error:', err);
+    res.status(500).json({ error: 'Failed to get payments' });
+  }
+});
+
+// Get payment history for a specific community
 router.get('/payments/:communityId', authenticateToken, async (req, res) => {
   const { communityId } = req.params;
   const pool = req.app.locals.pool;

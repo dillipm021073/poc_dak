@@ -9,18 +9,58 @@ import api, { setToken, getToken } from './api'
 // ICONS & UI COMPONENTS
 // ============================================================================
 
-const StarOfDavid = ({ size = 24, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <polygon points="12,2 4,14 20,14" stroke={color} strokeWidth="1.5" fill="none"/>
-    <polygon points="12,22 4,10 20,10" stroke={color} strokeWidth="1.5" fill="none"/>
-  </svg>
-)
-
+// Neutral D.A.K logo (no religious symbol)
 const DakLogo = ({ size = 32 }) => (
-  <div className="dak-logo" style={{ width: size, height: size }}>
-    <StarOfDavid size={size} color="var(--primary)" />
+  <div className="dak-logo" style={{ width: size, height: size, fontSize: size * 0.4, lineHeight: size + 'px' }}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="var(--primary)" strokeWidth="1.5" />
+      <path d="M8 8l4 4-4 4M13 8h3M13 12h3M13 16h3" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   </div>
 )
+
+// Religion-specific community symbols
+const CommunitySymbol = ({ communityType, size = 24, color = 'var(--primary)' }) => {
+  switch (communityType) {
+    case 'judaism':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <polygon points="12,2 4,14 20,14" stroke={color} strokeWidth="1.5" fill="none"/>
+          <polygon points="12,22 4,10 20,10" stroke={color} strokeWidth="1.5" fill="none"/>
+        </svg>
+      )
+    case 'christianity':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <line x1="12" y1="2" x2="12" y2="22" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+          <line x1="5" y1="9" x2="19" y2="9" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      )
+    case 'islam':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path d="M15 4a8 8 0 100 16 6 6 0 110-16z" stroke={color} strokeWidth="1.5"/>
+          <circle cx="17" cy="7" r="1.5" fill={color}/>
+        </svg>
+      )
+    case 'hinduism':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path d="M12 4c-1.5 2-3 3-3 5a3 3 0 006 0c0-2-1.5-3-3-5z" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
+          <path d="M9 12c-2 1-4 2.5-4 4.5C5 18.5 7 20 9 20c1.5 0 2.5-1 3-2" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M15 12c2 1 4 2.5 4 4.5c0 2-2 3.5-4 3.5c-1.5 0-2.5-1-3-2" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+          <circle cx="12" cy="21" r="1" fill={color}/>
+        </svg>
+      )
+    default:
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.5"/>
+          <circle cx="12" cy="12" r="3" fill={color}/>
+        </svg>
+      )
+  }
+}
 
 // ============================================================================
 // NOTIFICATION BELL
@@ -104,17 +144,94 @@ function NotificationBell() {
 }
 
 // ============================================================================
+// CHANGE PASSWORD MODAL
+// ============================================================================
+
+function ChangePasswordModal({ onClose }) {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+
+    if (newPassword.length < 6) {
+      setError('New password must be at least 6 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('New passwords do not match')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const result = await api.auth.changePassword({ currentPassword, newPassword })
+      setSuccess(result.message)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Change Password</h2>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
+
+        {!success ? (
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>Current Password</label>
+              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label>New Password</label>
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={6} required />
+            </div>
+            <div className="form-group">
+              <label>Confirm New Password</label>
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} minLength={6} required />
+            </div>
+            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+              {loading ? 'Changing...' : 'Change Password'}
+            </button>
+          </form>
+        ) : (
+          <button className="btn btn-primary btn-block" onClick={onClose}>Done</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // TOP NAVIGATION
 // ============================================================================
 
 function TopNav({ user, onLogout }) {
   const location = useLocation()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
 
   return (
     <nav className="top-nav">
       <Link to="/" className="nav-brand">
-        <StarOfDavid size={24} color="var(--primary)" />
+        <DakLogo size={24} />
         <span>D.A.K</span>
       </Link>
 
@@ -128,6 +245,10 @@ function TopNav({ user, onLogout }) {
             <Link to="/calendar" className={`nav-link ${location.pathname === '/calendar' ? 'active' : ''}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               Calendar
+            </Link>
+            <Link to="/activity" className={`nav-link ${location.pathname === '/activity' ? 'active' : ''}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+              Activity
             </Link>
             <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
@@ -152,11 +273,13 @@ function TopNav({ user, onLogout }) {
                     <strong>{user.name}</strong>
                     <span>{user.email}</span>
                   </div>
+                  <button className="user-dropdown-item" onClick={() => { setShowChangePassword(true); setUserMenuOpen(false) }}>Change Password</button>
                   <button className="user-dropdown-item" onClick={onLogout}>Sign Out</button>
                 </div>
               )}
             </div>
           </div>
+          {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
         </>
       ) : (
         <div className="nav-right">
@@ -288,13 +411,16 @@ function LoginPage({ onLogin }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [forgotMode, setForgotMode] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotMsg, setForgotMsg] = useState('')
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-    
+
     try {
       const result = await api.auth.login({ email, password })
       setToken(result.token)
@@ -304,6 +430,60 @@ function LoginPage({ onLogin }) {
       setError(err.message)
     }
     setLoading(false)
+  }
+
+  const handleForgot = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setForgotMsg('')
+    try {
+      const result = await api.auth.forgotPassword(forgotEmail)
+      setForgotMsg(result.message)
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  if (forgotMode) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <div className="auth-header">
+            <DakLogo size={48} />
+            <h1>Reset Password</h1>
+          </div>
+
+          {error && <div className="alert alert-error">{error}</div>}
+          {forgotMsg && <div className="alert alert-success">{forgotMsg}</div>}
+
+          {!forgotMsg && (
+            <form onSubmit={handleForgot}>
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  placeholder="Enter your email address"
+                  required
+                />
+              </div>
+              <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+            </form>
+          )}
+
+          <p className="auth-footer">
+            <button className="btn-link" onClick={() => { setForgotMode(false); setError(''); setForgotMsg('') }}>
+              Back to Sign In
+            </button>
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -335,6 +515,12 @@ function LoginPage({ onLogin }) {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+          </div>
+
+          <div className="forgot-password-link">
+            <button type="button" className="btn-link" onClick={() => { setForgotMode(true); setError('') }}>
+              Forgot Password?
+            </button>
           </div>
 
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
@@ -513,7 +699,7 @@ function HomePage({ user }) {
       ) : (
         <div className="community-grid">
           {communities.map(community => (
-            <CommunityCard key={community.id} community={community} onClick={() => navigate(`/community/${community.id}`)} />
+            <CommunityCard key={community.id} community={community} onClick={() => { sessionStorage.setItem('dak_community', community.id); navigate('/community') }} />
           ))}
         </div>
       )}
@@ -535,7 +721,9 @@ function CommunityCard({ community, onClick }) {
         {community.logoUrl ? (
           <img src={community.logoUrl} alt="" className="community-logo" />
         ) : (
-          <div className="community-logo-placeholder">{community.name.charAt(0)}</div>
+          <div className="community-logo-placeholder">
+            <CommunitySymbol communityType={community.communityType} size={28} color="white" />
+          </div>
         )}
         <div className="community-info">
           <h3>{community.name}</h3>
@@ -836,8 +1024,10 @@ function LiveStreamPlayer({ stream }) {
 function SupportWidget({ community, communityId, onActivated }) {
   const [supportType, setSupportType] = useState('one-time')
   const [amount, setAmount] = useState('72.00')
+  const [comment, setComment] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [successData, setSuccessData] = useState(null)
 
   const presets = [16, 36, 100, 250]
 
@@ -847,20 +1037,66 @@ function SupportWidget({ community, communityId, onActivated }) {
     try {
       const paymentResult = await api.access.activate({
         communityId,
-        amount: parseFloat(amount)
+        amount: parseFloat(amount),
+        donationMethod: 'card',
+        comment: comment.trim() || undefined
       })
-      await api.access.completePayment(paymentResult.paymentId)
-      if (onActivated) onActivated()
+      const result = await api.access.completePayment(paymentResult.paymentId)
+      setSuccessData({
+        amount: parseFloat(amount),
+        daysGranted: result.daysGranted,
+        daysRemaining: result.daysRemaining,
+        expiresAt: result.expiresAt
+      })
     } catch (err) {
       setError(err.message)
     }
     setLoading(false)
   }
 
+  const handleDone = () => {
+    setSuccessData(null)
+    setAmount('72.00')
+    setComment('')
+    if (onActivated) onActivated()
+  }
+
+  if (successData) {
+    return (
+      <div className="support-widget">
+        <div className="support-success-overlay">
+          <div className="support-success-icon">✓</div>
+          <h3>Thank you for your support!</h3>
+          <div className="support-success-details">
+            <div className="support-success-row">
+              <span>Amount</span>
+              <strong>${successData.amount.toFixed(2)}</strong>
+            </div>
+            <div className="support-success-row">
+              <span>Access granted</span>
+              <strong>{successData.daysGranted} days</strong>
+            </div>
+            <div className="support-success-row">
+              <span>Total remaining</span>
+              <strong>{successData.daysRemaining} days</strong>
+            </div>
+            <div className="support-success-row">
+              <span>Expires</span>
+              <strong>{new Date(successData.expiresAt).toLocaleDateString()}</strong>
+            </div>
+          </div>
+          <button className="btn btn-primary btn-block support-btn" onClick={handleDone}>
+            Done
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="support-widget">
       <div className="support-header">
-        <StarOfDavid size={32} color="var(--primary)" />
+        <CommunitySymbol communityType={community.communityType} size={32} />
         <div>
           <h3>Support {community.name}</h3>
           <p>Your support helps keep this <strong>community</strong> active.</p>
@@ -902,6 +1138,17 @@ function SupportWidget({ community, communityId, onActivated }) {
         </div>
       </div>
 
+      <div className="form-group" style={{ marginBottom: 12 }}>
+        <textarea
+          className="support-comment"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Add a comment (optional)"
+          rows={2}
+          maxLength={500}
+        />
+      </div>
+
       <p className="platform-fee-note">5% goes to platform upkeep</p>
 
       <button
@@ -920,15 +1167,16 @@ function SupportWidget({ community, communityId, onActivated }) {
 // ============================================================================
 
 function CommunityPage() {
-  const { id } = useParams()
+  const navigate = useNavigate()
+  const id = sessionStorage.getItem('dak_community')
   const [community, setCommunity] = useState(null)
   const [events, setEvents] = useState([])
   const [streams, setStreams] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
-  const navigate = useNavigate()
 
   useEffect(() => {
+    if (!id) { navigate('/'); return }
     loadCommunity()
   }, [id])
 
@@ -948,6 +1196,7 @@ function CommunityPage() {
     setLoading(false)
   }
 
+  if (!id) return null
   if (loading) return <div className="loading">Loading...</div>
   if (!community) return <div className="error-page">Community not found</div>
 
@@ -958,7 +1207,7 @@ function CommunityPage() {
       {/* Clean Header */}
       <div className="community-header-clean">
         <div className="community-header-left">
-          <StarOfDavid size={40} color="var(--primary)" />
+          <CommunitySymbol communityType={community.communityType} size={40} />
           <div>
             <h1>{community.name}</h1>
             <p className="community-location">{community.location || community.city || 'City, State'}</p>
@@ -1305,7 +1554,7 @@ function MessagesPage() {
             <div 
               key={thread.id} 
               className={`thread-card ${thread.unreadCount > 0 ? 'unread' : ''}`}
-              onClick={() => navigate(`/community/${thread.communityId}?tab=messages`)}
+              onClick={() => { sessionStorage.setItem('dak_community', thread.communityId); navigate('/community') }}
             >
               <div className="thread-info">
                 <h4>{thread.communityName}</h4>
@@ -1321,6 +1570,112 @@ function MessagesPage() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ============================================================================
+// ACTIVITY PAGE (Payment History + Access Status)
+// ============================================================================
+
+function ActivityPage() {
+  const [payments, setPayments] = useState([])
+  const [accessList, setAccessList] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadActivity()
+  }, [])
+
+  const loadActivity = async () => {
+    try {
+      const [paymentsData, accessData] = await Promise.all([
+        api.access.getAllPayments(),
+        api.access.getMyAccess()
+      ])
+      setPayments(paymentsData)
+      setAccessList(accessData)
+    } catch (err) {
+      console.error('Failed to load activity:', err)
+    }
+    setLoading(false)
+  }
+
+  if (loading) return <div className="loading">Loading activity...</div>
+
+  return (
+    <div className="activity-page">
+      <h1>My Activity</h1>
+      <p className="text-secondary">Your access status and payment history</p>
+
+      {/* Current Access Status */}
+      {accessList.length > 0 && (
+        <section className="activity-section">
+          <h2>Current Access</h2>
+          <div className="access-status-grid">
+            {accessList.map(a => (
+              <div key={a.communityId} className="access-status-card">
+                <div className="access-status-header">
+                  <strong>{a.communityName}</strong>
+                  <span className={`access-status-badge ${a.hasActiveAccess ? 'active' : 'expired'}`}>
+                    {a.hasActiveAccess ? 'Active' : 'Expired'}
+                  </span>
+                </div>
+                {a.hasActiveAccess ? (
+                  <div className="access-status-body">
+                    <span>{a.daysRemaining} days remaining</span>
+                    <span className="text-secondary">Expires {new Date(a.expiresAt).toLocaleDateString()}</span>
+                  </div>
+                ) : (
+                  <div className="access-status-body">
+                    <span className="text-secondary">No active access</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Donation History */}
+      <section className="activity-section">
+        <h2>Donation History</h2>
+        {payments.length === 0 ? (
+          <div className="empty-state">
+            <p>No donations yet</p>
+            <p className="text-secondary">Support a community to see your donation history here</p>
+          </div>
+        ) : (
+          <div className="donation-history-table-wrap">
+            <table className="donation-history-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Community</th>
+                  <th>Method</th>
+                  <th>Amount</th>
+                  <th>Comment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map(p => (
+                  <tr key={p.id}>
+                    <td className="donation-date">{new Date(p.created_at).toLocaleDateString('en', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                    <td><strong>{p.community_name}</strong></td>
+                    <td>
+                      <span className="donation-method-badge">
+                        {p.donation_method === 'card' ? '💳' : '🏦'} {p.donation_method || 'card'}
+                      </span>
+                    </td>
+                    <td className="donation-amount">${parseFloat(p.amount).toFixed(2)}</td>
+                    <td className="donation-comment">{p.comment || <span className="text-secondary">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   )
 }
@@ -1381,8 +1736,9 @@ function App() {
           
           {/* Protected Routes */}
           <Route path="/" element={user ? <HomePage user={user} /> : <LandingPage />} />
-          <Route path="/community/:id" element={user ? <CommunityPage /> : <Navigate to="/login" />} />
+          <Route path="/community" element={user ? <CommunityPage /> : <Navigate to="/login" />} />
           <Route path="/calendar" element={user ? <CalendarPage /> : <Navigate to="/login" />} />
+          <Route path="/activity" element={user ? <ActivityPage /> : <Navigate to="/login" />} />
           <Route path="/messages" element={user ? <MessagesPage /> : <Navigate to="/login" />} />
           
           {/* Fallback */}

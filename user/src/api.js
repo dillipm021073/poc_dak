@@ -44,7 +44,10 @@ async function api(endpoint, options = {}) {
 export const auth = {
   register: (data) => api('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   login: (data) => api('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
-  me: () => api('/auth/me')
+  me: () => api('/auth/me'),
+  changePassword: (data) => api('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
+  forgotPassword: (email) => api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (data) => api('/auth/reset-password', { method: 'POST', body: JSON.stringify(data) })
 };
 
 // Communities
@@ -61,7 +64,8 @@ export const access = {
   getMyAccess: () => api('/access/my-access'),
   activate: (data) => api('/access/activate', { method: 'POST', body: JSON.stringify(data) }),
   completePayment: (paymentId) => api(`/access/mock-complete/${paymentId}`, { method: 'POST' }),
-  getPayments: (communityId) => api(`/access/payments/${communityId}`)
+  getPayments: (communityId) => api(`/access/payments/${communityId}`),
+  getAllPayments: () => api('/access/payments')
 };
 
 // Events

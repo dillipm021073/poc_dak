@@ -83,18 +83,69 @@ function LoginPage({ onLogin }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [forgotMode, setForgotMode] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotMsg, setForgotMsg] = useState('')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-    
+
     try {
       await onLogin(email, password)
     } catch (err) {
       setError(err.message)
     }
     setLoading(false)
+  }
+
+  const handleForgot = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setForgotMsg('')
+    try {
+      const result = await api.auth.forgotPassword(forgotEmail)
+      setForgotMsg(result.message)
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  if (forgotMode) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-header">
+            <h1>D.A.K</h1>
+            <p>Reset Password</p>
+          </div>
+
+          {error && <div className="alert alert-error">{error}</div>}
+          {forgotMsg && <div className="alert alert-success">{forgotMsg}</div>}
+
+          {!forgotMsg && (
+            <form onSubmit={handleForgot}>
+              <div className="form-group">
+                <label>Email</label>
+                <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="Enter your email address" required />
+              </div>
+              <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+            </form>
+          )}
+
+          <p className="login-footer">
+            <button className="btn-link" onClick={() => { setForgotMode(false); setError(''); setForgotMsg('') }}>
+              Back to Sign In
+            </button>
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -128,6 +179,12 @@ function LoginPage({ onLogin }) {
             />
           </div>
 
+          <div className="forgot-password-link">
+            <button type="button" className="btn-link" onClick={() => { setForgotMode(true); setError('') }}>
+              Forgot Password?
+            </button>
+          </div>
+
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
@@ -138,10 +195,75 @@ function LoginPage({ onLogin }) {
 }
 
 // ============================================================================
+// CHANGE PASSWORD MODAL
+// ============================================================================
+
+function ChangePasswordModal({ onClose }) {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+    if (newPassword.length < 6) { setError('New password must be at least 6 characters'); return }
+    if (newPassword !== confirmPassword) { setError('New passwords do not match'); return }
+
+    setLoading(true)
+    try {
+      const result = await api.auth.changePassword({ currentPassword, newPassword })
+      setSuccess(result.message)
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
+    } catch (err) { setError(err.message) }
+    setLoading(false)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Change Password</h2>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
+        {!success ? (
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>Current Password</label>
+              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label>New Password</label>
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={6} required />
+            </div>
+            <div className="form-group">
+              <label>Confirm New Password</label>
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} minLength={6} required />
+            </div>
+            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+              {loading ? 'Changing...' : 'Change Password'}
+            </button>
+          </form>
+        ) : (
+          <button className="btn btn-primary btn-block" onClick={onClose}>Done</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // SIDEBAR
 // ============================================================================
 
 function Sidebar({ activeTab, onTabChange, onLogout }) {
+  const [showChangePassword, setShowChangePassword] = useState(false)
+
   const tabs = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'communities', icon: '🏛️', label: 'Communities' },
@@ -171,10 +293,14 @@ function Sidebar({ activeTab, onTabChange, onLogout }) {
       </nav>
 
       <div className="sidebar-footer">
-        <button className="btn btn-outline btn-block" onClick={onLogout}>
+        <button className="btn btn-outline btn-block" onClick={() => setShowChangePassword(true)}>
+          Change Password
+        </button>
+        <button className="btn btn-outline btn-block" onClick={onLogout} style={{ marginTop: 8 }}>
           Sign Out
         </button>
       </div>
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </aside>
   )
 }

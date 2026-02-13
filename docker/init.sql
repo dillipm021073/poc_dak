@@ -36,6 +36,9 @@ CREATE TABLE users (
     role user_role DEFAULT 'user',
     -- Users are locked to one community type (Chinese-wall)
     community_type community_type,
+    -- Password reset
+    password_reset_token VARCHAR(255),
+    password_reset_expires TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -140,10 +143,14 @@ CREATE TABLE payments (
     -- Access granted
     days_granted INTEGER NOT NULL,
     
+    -- Donation details
+    donation_method VARCHAR(50) DEFAULT 'card',
+    comment TEXT,
+
     -- Platform fee (calculated per sliding scale)
     platform_fee DECIMAL(10, 2),
     platform_fee_percent DECIMAL(5, 2),
-    
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -348,10 +355,26 @@ INSERT INTO users (id, email, password_hash, name, role, community_type) VALUES
 ('a0000000-0000-0000-0000-000000000006', 'imam@islamic.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Imam Ahmad Hassan', 'community_admin', 'islam'),
 ('a0000000-0000-0000-0000-000000000007', 'pandit@temple.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Pandit Sharma', 'community_admin', 'hinduism');
 
--- Regular users (password: user123)
+-- Regular users / devotees (password: admin123)
+-- Judaism devotees
 INSERT INTO users (id, email, password_hash, name, role, community_type) VALUES
 ('a0000000-0000-0000-0000-000000000003', 'sarah@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Sarah Miller', 'user', 'judaism'),
 ('a0000000-0000-0000-0000-000000000004', 'david@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'David Green', 'user', 'judaism');
+
+-- Christianity devotees
+INSERT INTO users (id, email, password_hash, name, role, community_type) VALUES
+('a0000000-0000-0000-0000-000000000010', 'mary@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Mary Johnson', 'user', 'christianity'),
+('a0000000-0000-0000-0000-000000000011', 'john@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'John Adams', 'user', 'christianity');
+
+-- Islam devotees
+INSERT INTO users (id, email, password_hash, name, role, community_type) VALUES
+('a0000000-0000-0000-0000-000000000012', 'fatima@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Fatima Al-Rashid', 'user', 'islam'),
+('a0000000-0000-0000-0000-000000000013', 'omar@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Omar Khalil', 'user', 'islam');
+
+-- Hinduism devotees
+INSERT INTO users (id, email, password_hash, name, role, community_type) VALUES
+('a0000000-0000-0000-0000-000000000014', 'priya@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Priya Patel', 'user', 'hinduism'),
+('a0000000-0000-0000-0000-000000000015', 'arjun@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Arjun Sharma', 'user', 'hinduism');
 
 -- Communities (one per type for demo)
 INSERT INTO communities (id, name, community_type, country, status, invite_link, about_text, head_of_institution, message_of_day, short_description) VALUES
@@ -386,20 +409,57 @@ INSERT INTO community_admins (community_id, user_id, admin_name, admin_email, ro
 ('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000006', 'Imam Ahmad Hassan', 'imam@islamic.com', 'Imam'),
 ('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000007', 'Pandit Sharma', 'pandit@temple.com', 'Head Priest');
 
--- Community memberships
+-- Community admin memberships
 INSERT INTO community_memberships (community_id, user_id, joined_via) VALUES
+('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'admin'),
+('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000005', 'admin'),
+('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000006', 'admin'),
+('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000007', 'admin');
+
+-- Community memberships (all devotees joined their community)
+INSERT INTO community_memberships (community_id, user_id, joined_via) VALUES
+-- Judaism
 ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'link'),
-('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'qr');
+('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'qr'),
+-- Christianity
+('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000010', 'link'),
+('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000011', 'qr'),
+-- Islam
+('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000012', 'link'),
+('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000013', 'qr'),
+-- Hinduism
+('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000014', 'link'),
+('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000015', 'qr');
 
--- Active Community Access (30 days for demo users)
+-- Active Community Access for all demo users
 INSERT INTO active_community_access (user_id, community_id, access_expires_at, credit_days) VALUES
+-- Judaism
 ('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '30 days', 0),
-('a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '15 days', 0);
+('a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '15 days', 0),
+-- Christianity
+('a0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP + INTERVAL '45 days', 0),
+('a0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP + INTERVAL '20 days', 0),
+-- Islam
+('a0000000-0000-0000-0000-000000000012', 'c0000000-0000-0000-0000-000000000003', CURRENT_TIMESTAMP + INTERVAL '60 days', 0),
+('a0000000-0000-0000-0000-000000000013', 'c0000000-0000-0000-0000-000000000003', CURRENT_TIMESTAMP + INTERVAL '10 days', 0),
+-- Hinduism
+('a0000000-0000-0000-0000-000000000014', 'c0000000-0000-0000-0000-000000000004', CURRENT_TIMESTAMP + INTERVAL '30 days', 0),
+('a0000000-0000-0000-0000-000000000015', 'c0000000-0000-0000-0000-000000000004', CURRENT_TIMESTAMP + INTERVAL '25 days', 0);
 
--- Sample payments
-INSERT INTO payments (id, user_id, community_id, amount, status, psp_transaction_id, days_granted, platform_fee, platform_fee_percent, created_at) VALUES
-('p0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 10.00, 'completed', 'pi_demo_123', 60, 2.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '5 days'),
-('p0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', 5.00, 'completed', 'pi_demo_456', 30, 1.25, 25.00, CURRENT_TIMESTAMP - INTERVAL '15 days');
+-- Sample payments (donations) for all communities
+INSERT INTO payments (id, user_id, community_id, amount, status, psp_transaction_id, days_granted, donation_method, comment, platform_fee, platform_fee_percent, created_at) VALUES
+-- Judaism
+('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 10.00, 'completed', 'pi_demo_101', 60, 'card', 'Supporting the weekly Shabbat services', 2.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '5 days'),
+('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', 5.00, 'completed', 'pi_demo_102', 30, 'card', NULL, 1.25, 25.00, CURRENT_TIMESTAMP - INTERVAL '15 days'),
+-- Christianity
+('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000002', 15.00, 'completed', 'pi_demo_201', 60, 'card', 'For the Sunday school program', 3.75, 25.00, CURRENT_TIMESTAMP - INTERVAL '3 days'),
+('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', 20.00, 'completed', 'pi_demo_202', 90, 'card', 'God bless this community', 4.00, 20.00, CURRENT_TIMESTAMP - INTERVAL '10 days'),
+-- Islam
+('b0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000012', 'c0000000-0000-0000-0000-000000000003', 25.00, 'completed', 'pi_demo_301', 90, 'card', 'Sadaqah for Ramadan', 5.00, 20.00, CURRENT_TIMESTAMP - INTERVAL '7 days'),
+('b0000000-0000-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000013', 'c0000000-0000-0000-0000-000000000003', 8.00, 'completed', 'pi_demo_302', 30, 'card', NULL, 2.00, 25.00, CURRENT_TIMESTAMP - INTERVAL '12 days'),
+-- Hinduism
+('b0000000-0000-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000014', 'c0000000-0000-0000-0000-000000000004', 12.00, 'completed', 'pi_demo_401', 60, 'card', 'For the Diwali celebrations', 3.00, 25.00, CURRENT_TIMESTAMP - INTERVAL '4 days'),
+('b0000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000015', 'c0000000-0000-0000-0000-000000000004', 7.00, 'completed', 'pi_demo_402', 30, 'card', 'Om Shanti', 1.75, 25.00, CURRENT_TIMESTAMP - INTERVAL '8 days');
 
 -- Sample events
 INSERT INTO events (id, community_id, title, description, starts_at, ends_at, location, is_virtual) VALUES
@@ -409,16 +469,16 @@ INSERT INTO events (id, community_id, title, description, starts_at, ends_at, lo
 
 -- Sample streams (with week tracking)
 INSERT INTO streams (id, community_id, title, description, scheduled_for, is_live, week_number, week_year, recording_url, recording_teaser_url) VALUES
-('s0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Morning Service', 'Live broadcast of our Shabbat morning service', CURRENT_TIMESTAMP + INTERVAL '3 days', FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, NULL, NULL),
-('s0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study Live', 'Interactive Torah study session', NULL, FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, 'https://storage.dak.com/recordings/demo.mp4', 'https://storage.dak.com/teasers/demo.mp4');
+('d0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Morning Service', 'Live broadcast of our Shabbat morning service', CURRENT_TIMESTAMP + INTERVAL '3 days', FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, NULL, NULL),
+('d0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study Live', 'Interactive Torah study session', NULL, FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, 'https://storage.dak.com/recordings/demo.mp4', 'https://storage.dak.com/teasers/demo.mp4');
 
 -- Sample message thread
 INSERT INTO message_threads (id, community_id, user_id, last_message_at) VALUES
-('t0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', CURRENT_TIMESTAMP);
+('f0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', CURRENT_TIMESTAMP);
 
 INSERT INTO messages (thread_id, sender_id, content, is_from_admin, is_read) VALUES
-('t0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'Shalom Rabbi, I have a question about the upcoming High Holidays.', FALSE, TRUE),
-('t0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'Shalom Sarah! Of course, I would be happy to help. What would you like to know?', TRUE, FALSE);
+('f0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'Shalom Rabbi, I have a question about the upcoming High Holidays.', FALSE, TRUE),
+('f0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'Shalom Sarah! Of course, I would be happy to help. What would you like to know?', TRUE, FALSE);
 
 -- Sample notifications
 INSERT INTO notifications (user_id, community_id, type, title, message, created_at) VALUES

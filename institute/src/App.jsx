@@ -5,6 +5,52 @@ import { useState, useEffect } from 'react'
 import api, { setToken, getToken } from './api'
 
 // ============================================================================
+// COMMUNITY SYMBOL (Religion-specific)
+// ============================================================================
+
+const CommunitySymbol = ({ communityType, size = 24, color = 'var(--primary)' }) => {
+  switch (communityType) {
+    case 'judaism':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <polygon points="12,2 4,14 20,14" stroke={color} strokeWidth="1.5" fill="none"/>
+          <polygon points="12,22 4,10 20,10" stroke={color} strokeWidth="1.5" fill="none"/>
+        </svg>
+      )
+    case 'christianity':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <line x1="12" y1="2" x2="12" y2="22" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+          <line x1="5" y1="9" x2="19" y2="9" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      )
+    case 'islam':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path d="M15 4a8 8 0 100 16 6 6 0 110-16z" stroke={color} strokeWidth="1.5"/>
+          <circle cx="17" cy="7" r="1.5" fill={color}/>
+        </svg>
+      )
+    case 'hinduism':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path d="M12 4c-1.5 2-3 3-3 5a3 3 0 006 0c0-2-1.5-3-3-5z" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
+          <path d="M9 12c-2 1-4 2.5-4 4.5C5 18.5 7 20 9 20c1.5 0 2.5-1 3-2" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M15 12c2 1 4 2.5 4 4.5c0 2-2 3.5-4 3.5c-1.5 0-2.5-1-3-2" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+          <circle cx="12" cy="21" r="1" fill={color}/>
+        </svg>
+      )
+    default:
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.5"/>
+          <circle cx="12" cy="12" r="3" fill={color}/>
+        </svg>
+      )
+  }
+}
+
+// ============================================================================
 // MAIN APP
 // ============================================================================
 
@@ -23,9 +69,6 @@ function App() {
     if (token) {
       try {
         const userData = await api.auth.me()
-        if (userData.role !== 'community_admin' && userData.role !== 'platform_admin') {
-          throw new Error('Not authorized')
-        }
         setUser(userData)
         await loadCommunity()
       } catch (err) {
@@ -49,12 +92,15 @@ function App() {
 
   const handleLogin = async (email, password) => {
     const result = await api.auth.login({ email, password })
-    if (result.user.role !== 'community_admin' && result.user.role !== 'platform_admin') {
-      throw new Error('Access denied. This portal is for community administrators only.')
-    }
     setToken(result.token)
     setUser(result.user)
     await loadCommunity()
+  }
+
+  const handleRegister = async (name, email, password) => {
+    const result = await api.auth.register({ name, email, password })
+    setToken(result.token)
+    setUser(result.user)
   }
 
   const handleLogout = () => {
@@ -73,7 +119,7 @@ function App() {
   }
 
   if (!user) {
-    return <LoginPage onLogin={handleLogin} />
+    return <LoginPage onLogin={handleLogin} onRegister={handleRegister} />
   }
 
   if (!community) {
@@ -104,23 +150,168 @@ function App() {
 // LOGIN PAGE
 // ============================================================================
 
-function LoginPage({ onLogin }) {
+function LoginPage({ onLogin, onRegister }) {
+  const [mode, setMode] = useState('login') // 'login', 'register', 'forgot'
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotMsg, setForgotMsg] = useState('')
 
-  const handleSubmit = async (e) => {
+  const resetForm = () => {
+    setName(''); setEmail(''); setPassword(''); setConfirmPassword('')
+    setError(''); setForgotMsg(''); setForgotEmail('')
+  }
+
+  const handleLogin = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-    
     try {
       await onLogin(email, password)
     } catch (err) {
       setError(err.message)
     }
     setLoading(false)
+  }
+
+  const handleRegister = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (password !== confirmPassword) { setError('Passwords do not match'); return }
+    setLoading(true)
+    try {
+      await onRegister(name, email, password)
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  const handleForgot = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setForgotMsg('')
+    try {
+      const result = await api.auth.forgotPassword(forgotEmail)
+      setForgotMsg(result.message)
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  if (mode === 'forgot') {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-header">
+            <h1>D.A.K</h1>
+            <p>Reset Password</p>
+          </div>
+
+          {error && <div className="alert alert-error">{error}</div>}
+          {forgotMsg && <div className="alert alert-success">{forgotMsg}</div>}
+
+          {!forgotMsg && (
+            <form onSubmit={handleForgot}>
+              <div className="form-group">
+                <label>Email</label>
+                <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="Enter your email address" required />
+              </div>
+              <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+            </form>
+          )}
+
+          <p className="login-footer">
+            <button className="btn-link" onClick={() => { setMode('login'); resetForm() }}>
+              Back to Sign In
+            </button>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === 'register') {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-header">
+            <h1>D.A.K</h1>
+            <p>Register as Community Admin</p>
+          </div>
+
+          {error && <div className="alert alert-error">{error}</div>}
+
+          <form onSubmit={handleRegister}>
+            <div className="form-group">
+              <label>Full Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your full name"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimum 6 characters"
+                minLength={6}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Confirm Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter your password"
+                minLength={6}
+                required
+              />
+            </div>
+
+            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+              {loading ? 'Creating Account...' : 'Create Account'}
+            </button>
+          </form>
+
+          <p className="login-footer">
+            Already have an account?{' '}
+            <button className="btn-link" onClick={() => { setMode('login'); resetForm() }}>
+              Sign In
+            </button>
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -133,7 +324,7 @@ function LoginPage({ onLogin }) {
 
         {error && <div className="alert alert-error">{error}</div>}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleLogin}>
           <div className="form-group">
             <label>Email</label>
             <input
@@ -154,10 +345,23 @@ function LoginPage({ onLogin }) {
             />
           </div>
 
+          <div className="forgot-password-link">
+            <button type="button" className="btn-link" onClick={() => { setMode('forgot'); resetForm() }}>
+              Forgot Password?
+            </button>
+          </div>
+
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <p className="login-footer">
+          New community admin?{' '}
+          <button className="btn-link" onClick={() => { setMode('register'); resetForm() }}>
+            Register here
+          </button>
+        </p>
       </div>
     </div>
   )
@@ -333,10 +537,75 @@ function OnboardingPage({ user, onComplete }) {
 }
 
 // ============================================================================
+// CHANGE PASSWORD MODAL
+// ============================================================================
+
+function ChangePasswordModal({ onClose }) {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+    if (newPassword.length < 6) { setError('New password must be at least 6 characters'); return }
+    if (newPassword !== confirmPassword) { setError('New passwords do not match'); return }
+
+    setLoading(true)
+    try {
+      const result = await api.auth.changePassword({ currentPassword, newPassword })
+      setSuccess(result.message)
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('')
+    } catch (err) { setError(err.message) }
+    setLoading(false)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Change Password</h2>
+          <button className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
+        {!success ? (
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>Current Password</label>
+              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label>New Password</label>
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={6} required />
+            </div>
+            <div className="form-group">
+              <label>Confirm New Password</label>
+              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} minLength={6} required />
+            </div>
+            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+              {loading ? 'Changing...' : 'Change Password'}
+            </button>
+          </form>
+        ) : (
+          <button className="btn btn-primary btn-block" onClick={onClose}>Done</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // SIDEBAR
 // ============================================================================
 
 function Sidebar({ community, activeTab, onTabChange, onLogout }) {
+  const [showChangePassword, setShowChangePassword] = useState(false)
+
   const tabs = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'settings', icon: '⚙️', label: 'Page Settings' },
@@ -350,7 +619,9 @@ function Sidebar({ community, activeTab, onTabChange, onLogout }) {
     <aside className="sidebar">
       <div className="sidebar-header">
         <div className="community-badge">
-          <div className="community-avatar">{community.name.charAt(0)}</div>
+          <div className="community-avatar">
+            <CommunitySymbol communityType={community.communityType} size={24} color="white" />
+          </div>
           <div className="community-info">
             <h3>{community.name}</h3>
             <span className={`status-badge ${community.status}`}>{community.status}</span>
@@ -376,10 +647,14 @@ function Sidebar({ community, activeTab, onTabChange, onLogout }) {
           <label>Invite Link</label>
           <code>{window.location.origin.replace(':3002', ':3003')}/join/{community.inviteLink}</code>
         </div>
-        <button className="btn btn-outline btn-block" onClick={onLogout}>
+        <button className="btn btn-outline btn-block" onClick={() => setShowChangePassword(true)}>
+          Change Password
+        </button>
+        <button className="btn btn-outline btn-block" onClick={onLogout} style={{ marginTop: 8 }}>
           Sign Out
         </button>
       </div>
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </aside>
   )
 }
@@ -1065,6 +1340,27 @@ function MessagesTab({ community }) {
 // ============================================================================
 
 function MembersTab({ community }) {
+  const [members, setMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadMembers()
+  }, [community.id])
+
+  const loadMembers = async () => {
+    try {
+      const data = await api.communities.getMembers(community.id)
+      setMembers(data)
+    } catch (err) {
+      console.error('Failed to load members:', err)
+    }
+    setLoading(false)
+  }
+
+  const activeCount = members.filter(m => m.hasActiveAccess).length
+
+  if (loading) return <div className="loading">Loading members...</div>
+
   return (
     <div className="members-tab">
       <div className="page-header">
@@ -1074,15 +1370,60 @@ function MembersTab({ community }) {
 
       <div className="stats-summary">
         <div className="stat-item">
-          <span className="stat-value">{community.memberCount || 0}</span>
+          <span className="stat-value">{members.length}</span>
           <span className="stat-label">Total Members</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-value">{activeCount}</span>
+          <span className="stat-label">Active Subscribers</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-value">{members.length - activeCount}</span>
+          <span className="stat-label">View-Only</span>
         </div>
       </div>
 
-      <div className="info-card">
-        <p>Detailed member management will be available in a future update.</p>
-        <p className="text-secondary">Currently, you can view member count and communicate via messages.</p>
-      </div>
+      {members.length === 0 ? (
+        <div className="empty-state">No members yet</div>
+      ) : (
+        <div className="table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Joined</th>
+                <th>Joined Via</th>
+                <th>Access Status</th>
+                <th>Access Expires</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map(member => (
+                <tr key={member.id}>
+                  <td>
+                    <div className="member-cell">
+                      <strong>{member.name || 'Unnamed'}</strong>
+                      <span className="text-secondary">{member.email}</span>
+                    </div>
+                  </td>
+                  <td>{new Date(member.joinedAt).toLocaleDateString()}</td>
+                  <td className="capitalize">{member.joinedVia}</td>
+                  <td>
+                    <span className={`status-badge ${member.hasActiveAccess ? 'active' : 'pending'}`}>
+                      {member.hasActiveAccess ? 'Active' : 'View-Only'}
+                    </span>
+                  </td>
+                  <td>
+                    {member.accessExpiresAt
+                      ? new Date(member.accessExpiresAt).toLocaleDateString()
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

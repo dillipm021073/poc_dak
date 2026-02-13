@@ -567,6 +567,62 @@ body {
   color: var(--primary);
 }
 
+.forgot-password-link {
+  text-align: right;
+  margin: -8px 0 16px;
+}
+
+/* ============================================================================
+   MODAL
+   ============================================================================ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 32px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.modal-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--gray-400);
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--gray-700);
+}
+
 .app-loading {
   min-height: 100vh;
   display: flex;
@@ -1686,6 +1742,229 @@ body {
 }
 
 /* ============================================================================
+   SUPPORT WIDGET SUCCESS OVERLAY
+   ============================================================================ */
+
+.support-success-overlay {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.support-success-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  background: var(--success);
+  color: white;
+  font-size: 28px;
+  font-weight: 700;
+  border-radius: 50%;
+}
+
+.support-success-overlay h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--gray-800);
+}
+
+.support-success-details {
+  background: var(--gray-50);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.support-success-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.support-success-row:not(:last-child) {
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.support-success-row span {
+  color: var(--gray-500);
+}
+
+.support-success-row strong {
+  color: var(--gray-800);
+}
+
+/* ============================================================================
+   ACTIVITY PAGE
+   ============================================================================ */
+
+.activity-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.activity-page h1 {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.activity-page > p {
+  color: var(--gray-500);
+  margin-bottom: 32px;
+}
+
+.activity-section {
+  margin-bottom: 32px;
+}
+
+.activity-section h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--gray-700);
+}
+
+/* Access Status Grid */
+.access-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.access-status-card {
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 20px;
+}
+
+.access-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.access-status-header strong {
+  font-size: 15px;
+}
+
+.access-status-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+.access-status-badge.active {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.access-status-badge.expired {
+  background: var(--gray-200);
+  color: var(--gray-600);
+}
+
+.access-status-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+/* Donation History Table */
+.donation-history-table-wrap {
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+
+.donation-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.donation-history-table thead th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--gray-200);
+  white-space: nowrap;
+}
+
+.donation-history-table tbody tr {
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.donation-history-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.donation-history-table tbody td {
+  padding: 14px 16px;
+  vertical-align: middle;
+}
+
+.donation-date {
+  white-space: nowrap;
+  color: var(--gray-600);
+}
+
+.donation-method-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  text-transform: capitalize;
+  color: var(--gray-600);
+}
+
+.donation-amount {
+  font-weight: 600;
+  color: var(--gray-800);
+  white-space: nowrap;
+}
+
+.donation-comment {
+  font-size: 13px;
+  color: var(--gray-600);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Support Comment Textarea */
+.support-comment {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.support-comment:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* ============================================================================
    RESPONSIVE
    ============================================================================ */
 
@@ -1744,5 +2023,30 @@ body {
 
   .tab-content-wrapper {
     padding: 20px;
+  }
+
+  .donation-history-table thead {
+    display: none;
+  }
+
+  .donation-history-table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding: 12px 16px;
+  }
+
+  .donation-history-table tbody td {
+    padding: 0;
+  }
+
+  .donation-comment {
+    width: 100%;
+    max-width: none;
+    white-space: normal;
+  }
+
+  .access-status-grid {
+    grid-template-columns: 1fr;
   }
 }

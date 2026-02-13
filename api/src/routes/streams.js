@@ -19,32 +19,41 @@ function getWeekNumber(date) {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
-// Get community streams (authenticated - must be member)
+// Get community streams (authenticated - must be member or admin)
 router.get('/community/:communityId', authenticateToken, async (req, res) => {
   const { communityId } = req.params;
   const pool = req.app.locals.pool;
 
   try {
-    // Check membership
-    const membershipResult = await pool.query(
-      `SELECT id FROM community_memberships 
-       WHERE community_id = $1 AND user_id = $2`,
+    // Check if user is community admin
+    const adminCheck = await pool.query(
+      `SELECT id FROM community_admins WHERE community_id = $1 AND user_id = $2`,
       [communityId, req.user.userId]
     );
+    const isAdmin = adminCheck.rows.length > 0 || req.user.role === 'platform_admin';
 
-    if (membershipResult.rows.length === 0) {
-      return res.status(403).json({ error: 'You must be a member to view streams' });
+    if (!isAdmin) {
+      // Check membership
+      const membershipResult = await pool.query(
+        `SELECT id FROM community_memberships
+         WHERE community_id = $1 AND user_id = $2`,
+        [communityId, req.user.userId]
+      );
+
+      if (membershipResult.rows.length === 0) {
+        return res.status(403).json({ error: 'You must be a member to view streams' });
+      }
     }
 
     // Check user's access level
     const accessResult = await pool.query(
-      `SELECT access_expires_at FROM active_community_access 
+      `SELECT access_expires_at FROM active_community_access
        WHERE community_id = $1 AND user_id = $2`,
       [communityId, req.user.userId]
     );
 
-    const hasActiveAccess = accessResult.rows.length > 0 && 
-      new Date(accessResult.rows[0].access_expires_at) > new Date();
+    const hasActiveAccess = isAdmin || (accessResult.rows.length > 0 &&
+      new Date(accessResult.rows[0].access_expires_at) > new Date());
 
     // Get streams
     const streamsResult = await pool.query(
