@@ -1,0 +1,1396 @@
+// D.A.K MVP v3 - User Dashboard
+// Lean MVP Specification v1.4 FINAL
+
+import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, Link, useLocation, useParams, useNavigate } from 'react-router-dom'
+import api, { setToken, getToken } from './api'
+
+// ============================================================================
+// ICONS & UI COMPONENTS
+// ============================================================================
+
+const StarOfDavid = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <polygon points="12,2 4,14 20,14" stroke={color} strokeWidth="1.5" fill="none"/>
+    <polygon points="12,22 4,10 20,10" stroke={color} strokeWidth="1.5" fill="none"/>
+  </svg>
+)
+
+const DakLogo = ({ size = 32 }) => (
+  <div className="dak-logo" style={{ width: size, height: size }}>
+    <StarOfDavid size={size} color="var(--primary)" />
+  </div>
+)
+
+// ============================================================================
+// NOTIFICATION BELL
+// ============================================================================
+
+function NotificationBell() {
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    loadNotifications()
+    const interval = setInterval(loadNotifications, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const loadNotifications = async () => {
+    try {
+      const [notifs, countData] = await Promise.all([
+        api.notifications.getAll(),
+        api.notifications.getUnreadCount()
+      ])
+      setNotifications(notifs)
+      setUnreadCount(countData.count)
+    } catch (err) {
+      console.error('Failed to load notifications:', err)
+    }
+  }
+
+  const handleMarkAllRead = async () => {
+    await api.notifications.markAllRead()
+    setUnreadCount(0)
+    loadNotifications()
+  }
+
+  const getIcon = (type) => {
+    switch(type) {
+      case 'access': return '✨'
+      case 'event': return '📅'
+      case 'stream': return '📺'
+      case 'message': return '💬'
+      case 'welcome': return '👋'
+      default: return '🔔'
+    }
+  }
+
+  return (
+    <div className="notification-wrapper">
+      <button className="nav-bell" onClick={() => setOpen(!open)}>
+        🔔
+        {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
+      </button>
+      {open && (
+        <div className="dropdown-menu notification-dropdown">
+          <div className="dropdown-header">
+            <h4>Notifications</h4>
+            {unreadCount > 0 && (
+              <button className="btn-link" onClick={handleMarkAllRead}>Mark all read</button>
+            )}
+          </div>
+          <div className="dropdown-body">
+            {notifications.length === 0 ? (
+              <p className="empty-state">No notifications</p>
+            ) : (
+              notifications.slice(0, 10).map(n => (
+                <div key={n.id} className={`notification-item ${!n.isRead ? 'unread' : ''}`}>
+                  <span className="notification-icon">{getIcon(n.type)}</span>
+                  <div className="notification-content">
+                    <strong>{n.title}</strong>
+                    <p>{n.message}</p>
+                    <small>{new Date(n.createdAt).toLocaleDateString()}</small>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// TOP NAVIGATION
+// ============================================================================
+
+function TopNav({ user, onLogout }) {
+  const location = useLocation()
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+
+  return (
+    <nav className="top-nav">
+      <Link to="/" className="nav-brand">
+        <StarOfDavid size={24} color="var(--primary)" />
+        <span>D.A.K</span>
+      </Link>
+
+      {user ? (
+        <>
+          <div className="nav-links">
+            <Link to="/messages" className={`nav-link ${location.pathname === '/messages' ? 'active' : ''}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+              Chat
+            </Link>
+            <Link to="/calendar" className={`nav-link ${location.pathname === '/calendar' ? 'active' : ''}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Calendar
+            </Link>
+            <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              Updates
+            </Link>
+          </div>
+
+          <div className="nav-right">
+            <NotificationBell />
+            <div className="nav-user-wrapper">
+              <div className="nav-user" onClick={() => setUserMenuOpen(!userMenuOpen)}>
+                <img
+                  className="avatar-img"
+                  src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'U')}&background=2563eb&color=fff&size=32`}
+                  alt=""
+                />
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              {userMenuOpen && (
+                <div className="user-dropdown">
+                  <div className="user-dropdown-header">
+                    <strong>{user.name}</strong>
+                    <span>{user.email}</span>
+                  </div>
+                  <button className="user-dropdown-item" onClick={onLogout}>Sign Out</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="nav-right">
+          <Link to="/login" className="btn btn-outline">Sign In</Link>
+        </div>
+      )}
+    </nav>
+  )
+}
+
+// ============================================================================
+// PUBLIC LANDING PAGE (Waiting List Only)
+// ============================================================================
+
+function LandingPage() {
+  const [email, setEmail] = useState('')
+  const [communityType, setCommunityType] = useState('')
+  const [institution, setInstitution] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const communityTypes = [
+    { value: 'judaism', label: 'Judaism' },
+    { value: 'christianity', label: 'Christianity' },
+    { value: 'islam', label: 'Islam' },
+    { value: 'hinduism', label: 'Hinduism' }
+  ]
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    
+    try {
+      await api.waitingList.join({
+        email,
+        communityType,
+        recommendedInstitution: institution
+      })
+      setSubmitted(true)
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  if (submitted) {
+    return (
+      <div className="landing-page">
+        <div className="landing-card success-card">
+          <div className="success-icon">✓</div>
+          <h2>Thank You!</h2>
+          <p>We'll notify you when communities in your area become available.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="landing-page">
+      <div className="landing-hero">
+        <DakLogo size={64} />
+        <h1>D.A.K</h1>
+        <p className="tagline">Digital Access Key — Connect with your faith community</p>
+      </div>
+
+      <div className="landing-card">
+        <h2>Join the Waiting List</h2>
+        <p className="text-secondary">Be notified when your community goes live</p>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="waiting-form">
+          <div className="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Community Type</label>
+            <select
+              value={communityType}
+              onChange={(e) => setCommunityType(e.target.value)}
+              required
+            >
+              <option value="">Select...</option>
+              {communityTypes.map(ct => (
+                <option key={ct.value} value={ct.value}>{ct.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Recommend an Institution (Optional)</label>
+            <input
+              type="text"
+              value={institution}
+              onChange={(e) => setInstitution(e.target.value)}
+              placeholder="e.g., Temple Beth Israel"
+            />
+          </div>
+
+          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+            {loading ? 'Submitting...' : 'Join Waiting List'}
+          </button>
+        </form>
+      </div>
+
+      <p className="landing-footer">
+        Already have an invite? <Link to="/login">Sign In</Link>
+      </p>
+    </div>
+  )
+}
+
+// ============================================================================
+// LOGIN PAGE
+// ============================================================================
+
+function LoginPage({ onLogin }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    
+    try {
+      const result = await api.auth.login({ email, password })
+      setToken(result.token)
+      onLogin(result.user)
+      navigate('/')
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-header">
+          <DakLogo size={48} />
+          <h1>Sign In</h1>
+        </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        <p className="auth-footer">
+          Don't have an account? You need an invite link from a community.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// REGISTER PAGE (Via Invite Link)
+// ============================================================================
+
+function RegisterPage({ onLogin }) {
+  const { inviteLink } = useParams()
+  const [community, setCommunity] = useState(null)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    loadCommunity()
+  }, [inviteLink])
+
+  const loadCommunity = async () => {
+    try {
+      const data = await api.communities.getByInvite(inviteLink)
+      setCommunity(data)
+    } catch (err) {
+      setError('Invalid or expired invite link')
+    }
+    setLoading(false)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    
+    try {
+      const result = await api.auth.register({
+        name,
+        email,
+        password,
+        inviteLink
+      })
+      setToken(result.token)
+      onLogin(result.user)
+      navigate('/')
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  if (loading) return <div className="loading-page">Loading...</div>
+
+  if (!community) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card error-card">
+          <h2>Invalid Invite</h2>
+          <p>{error || 'This invite link is invalid or has expired.'}</p>
+          <Link to="/" className="btn btn-primary">Go Home</Link>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-header">
+          <DakLogo size={48} />
+          <h1>Join {community.name}</h1>
+        </div>
+
+        <div className="community-preview">
+          {community.logoUrl && <img src={community.logoUrl} alt="" className="community-logo" />}
+          <p className="confirmation-message">{community.confirmationMessage}</p>
+        </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={6}
+              required
+            />
+          </div>
+
+          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Create Account'}
+          </button>
+        </form>
+
+        <p className="auth-footer">
+          Already have an account? <Link to="/login">Sign In</Link>
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// HOME - USER DASHBOARD
+// ============================================================================
+
+function HomePage({ user }) {
+  const [communities, setCommunities] = useState([])
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    loadCommunities()
+  }, [])
+
+  const loadCommunities = async () => {
+    try {
+      const data = await api.communities.getMy()
+      setCommunities(data)
+    } catch (err) {
+      console.error('Failed to load communities:', err)
+    }
+    setLoading(false)
+  }
+
+  if (loading) return <div className="loading">Loading...</div>
+
+  return (
+    <div className="dashboard">
+      <div className="dashboard-header">
+        <h1>Welcome, {user.name}</h1>
+        <p className="text-secondary">Your communities in the {user.communityType} network</p>
+      </div>
+
+      {communities.length === 0 ? (
+        <div className="empty-state">
+          <p>You haven't joined any communities yet.</p>
+          <p className="text-secondary">Use an invite link from a community to get started.</p>
+        </div>
+      ) : (
+        <div className="community-grid">
+          {communities.map(community => (
+            <CommunityCard key={community.id} community={community} onClick={() => navigate(`/community/${community.id}`)} />
+          ))}
+        </div>
+      )}
+
+      {/* Global Access Placeholder */}
+      <div className="global-access-placeholder">
+        <h3>🌍 Global Access</h3>
+        <p>Coming soon — Access all communities in your network with one subscription.</p>
+      </div>
+    </div>
+  )
+}
+
+// Community Card Component
+function CommunityCard({ community, onClick }) {
+  return (
+    <div className="community-card" onClick={onClick}>
+      <div className="community-card-header">
+        {community.logoUrl ? (
+          <img src={community.logoUrl} alt="" className="community-logo" />
+        ) : (
+          <div className="community-logo-placeholder">{community.name.charAt(0)}</div>
+        )}
+        <div className="community-info">
+          <h3>{community.name}</h3>
+          <span className="community-type">{community.communityType}</span>
+        </div>
+      </div>
+
+      <div className="community-card-body">
+        {community.messageOfDay && (
+          <p className="message-of-day">"{community.messageOfDay}"</p>
+        )}
+      </div>
+
+      <div className="community-card-footer">
+        <AccessBadge community={community} />
+      </div>
+    </div>
+  )
+}
+
+// Access Status Badge
+function AccessBadge({ community }) {
+  if (community.hasActiveAccess) {
+    return (
+      <div className="access-badge active">
+        <span className="access-icon">✓</span>
+        <span>Active Access</span>
+        <span className="days-remaining">{community.daysRemaining} days</span>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="access-badge view-only">
+      <span className="access-icon">👁</span>
+      <span>View Only</span>
+    </div>
+  )
+}
+
+// ============================================================================
+// COMMUNITY PAGE
+// ============================================================================
+
+// ============================================================================
+// MINI CALENDAR WIDGET
+// ============================================================================
+
+function MiniCalendar({ events = [] }) {
+  const [currentDate, setCurrentDate] = useState(new Date())
+
+  const getWeekDates = () => {
+    const start = new Date(currentDate)
+    const day = start.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    start.setDate(start.getDate() + diff)
+    const dates = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start)
+      d.setDate(start.getDate() + i)
+      dates.push(d)
+    }
+    return dates
+  }
+
+  const weekDates = getWeekDates()
+  const dayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December']
+
+  const hasEvent = (date) => {
+    return events.some(event => {
+      const eventDate = new Date(event.startsAt)
+      return eventDate.toDateString() === date.toDateString()
+    })
+  }
+
+  const isToday = (date) => date.toDateString() === new Date().toDateString()
+
+  const prevWeek = () => {
+    const d = new Date(currentDate)
+    d.setDate(d.getDate() - 7)
+    setCurrentDate(d)
+  }
+
+  const nextWeek = () => {
+    const d = new Date(currentDate)
+    d.setDate(d.getDate() + 7)
+    setCurrentDate(d)
+  }
+
+  return (
+    <div className="mini-calendar">
+      <div className="mini-calendar-header">
+        <span className="mini-calendar-title">
+          {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </span>
+        <div className="mini-calendar-nav">
+          <button onClick={prevWeek}>&lt;</button>
+          <button onClick={nextWeek}>&gt;</button>
+        </div>
+      </div>
+      <div className="mini-calendar-grid">
+        {weekDates.map((date, i) => (
+          <div key={i} className="mini-calendar-day">
+            <span className="mini-cal-label">{dayLabels[i]}</span>
+            <span className={`mini-cal-date ${isToday(date) ? 'today' : ''}`}>
+              {date.getDate()}
+            </span>
+            {hasEvent(date) && <span className="mini-cal-dot" />}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// UPCOMING EVENTS SIDEBAR
+// ============================================================================
+
+function UpcomingEventsSidebar({ events = [] }) {
+  const upcoming = events
+    .filter(e => new Date(e.startsAt) >= new Date())
+    .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt))
+    .slice(0, 3)
+
+  const formatDay = (dateStr) => {
+    const d = new Date(dateStr)
+    return d.getDate()
+  }
+
+  const formatWeekday = (dateStr) => {
+    return new Date(dateStr).toLocaleDateString('en', { weekday: 'short' })
+  }
+
+  const formatDateRight = (dateStr) => {
+    const d = new Date(dateStr)
+    return `${d.toLocaleDateString('en', { weekday: 'short' })}, ${d.toLocaleDateString('en', { month: 'short' })} ${d.getDate()}`
+  }
+
+  return (
+    <div className="sidebar-card">
+      <div className="sidebar-card-header">
+        <h3>Upcoming Events</h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <div className="sidebar-card-body">
+        {upcoming.length === 0 ? (
+          <p className="text-secondary" style={{ padding: '16px', fontSize: '14px' }}>No upcoming events</p>
+        ) : (
+          upcoming.map(event => (
+            <div key={event.id} className="upcoming-event-item">
+              <div className="upcoming-event-date-icon">
+                <span className="ue-day">{formatDay(event.startsAt)}</span>
+              </div>
+              <div className="upcoming-event-info">
+                <strong>{event.title}</strong>
+                <span>{new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
+              </div>
+              <div className="upcoming-event-right">
+                {formatDateRight(event.startsAt)}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      <Link to="/calendar" className="sidebar-card-link">View full calendar</Link>
+    </div>
+  )
+}
+
+// ============================================================================
+// RECENTLY ADDED SIDEBAR
+// ============================================================================
+
+function RecentlyAddedSidebar({ streams = [] }) {
+  const recent = streams
+    .filter(s => s.recordingUrl)
+    .sort((a, b) => new Date(b.createdAt || b.scheduledFor) - new Date(a.createdAt || a.scheduledFor))
+    .slice(0, 2)
+
+  const timeAgo = (dateStr) => {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+    if (days === 0) return 'Today'
+    if (days === 1) return '1 day ago'
+    return `${days} days ago`
+  }
+
+  return (
+    <div className="sidebar-card">
+      <div className="sidebar-card-header">
+        <h3>Recently Added</h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+      <div className="sidebar-card-body">
+        {recent.length === 0 ? (
+          <p className="text-secondary" style={{ padding: '16px', fontSize: '14px' }}>No recent media</p>
+        ) : (
+          recent.map(item => (
+            <div key={item.id} className="recent-media-item">
+              <div className="recent-media-thumb">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+              </div>
+              <div className="recent-media-info">
+                <strong>{item.title}</strong>
+                <span className="recent-media-type">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5,3 19,12 5,21"/></svg>
+                  Video
+                </span>
+              </div>
+              <span className="recent-media-time">{timeAgo(item.createdAt || item.scheduledFor)}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// LIVE STREAM PLAYER
+// ============================================================================
+
+function LiveStreamPlayer({ stream }) {
+  if (!stream) {
+    return (
+      <div className="livestream-section">
+        <div className="section-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <h3>Live Stream</h3>
+        </div>
+        <div className="livestream-placeholder">
+          <p>No live stream at the moment</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="livestream-section">
+      <div className="section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <h3>Live Stream</h3>
+      </div>
+      <div className="livestream-player">
+        <div className="livestream-video">
+          <div className="livestream-overlay">
+            <span className="live-tag">LIVE</span>
+            <span className="viewer-count">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              {stream.currentViewers || 0}
+            </span>
+          </div>
+          <div className="livestream-poster">
+            {stream.thumbnailUrl ? (
+              <img src={stream.thumbnailUrl} alt="" />
+            ) : (
+              <div className="livestream-poster-placeholder" />
+            )}
+          </div>
+        </div>
+        <div className="livestream-controls">
+          <div className="controls-left">
+            <button className="control-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+            </button>
+            <button className="control-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
+            <button className="control-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>
+            </button>
+            <div className="volume-slider">
+              <div className="volume-track"><div className="volume-fill" style={{ width: '60%' }} /></div>
+            </div>
+          </div>
+          <div className="controls-right">
+            <button className="control-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            </button>
+            <button className="control-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// SUPPORT WIDGET
+// ============================================================================
+
+function SupportWidget({ community, communityId, onActivated }) {
+  const [supportType, setSupportType] = useState('one-time')
+  const [amount, setAmount] = useState('72.00')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const presets = [16, 36, 100, 250]
+
+  const handleSupport = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const paymentResult = await api.access.activate({
+        communityId,
+        amount: parseFloat(amount)
+      })
+      await api.access.completePayment(paymentResult.paymentId)
+      if (onActivated) onActivated()
+    } catch (err) {
+      setError(err.message)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="support-widget">
+      <div className="support-header">
+        <StarOfDavid size={32} color="var(--primary)" />
+        <div>
+          <h3>Support {community.name}</h3>
+          <p>Your support helps keep this <strong>community</strong> active.</p>
+        </div>
+      </div>
+
+      {error && <div className="alert alert-error">{error}</div>}
+
+      <div className="support-type-toggle">
+        <button
+          className={supportType === 'one-time' ? 'active' : ''}
+          onClick={() => setSupportType('one-time')}
+        >One-time</button>
+        <button
+          className={supportType === 'monthly' ? 'active' : ''}
+          onClick={() => setSupportType('monthly')}
+        >Monthly</button>
+      </div>
+
+      <div className="support-amounts">
+        {presets.map(preset => (
+          <button
+            key={preset}
+            className={`support-amount-btn ${parseFloat(amount) === preset ? 'active' : ''}`}
+            onClick={() => setAmount(preset.toString())}
+          >
+            ${preset}
+          </button>
+        ))}
+        <div className="support-custom-input">
+          <span className="currency-symbol">$</span>
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            min="1"
+            step="0.01"
+          />
+        </div>
+      </div>
+
+      <p className="platform-fee-note">5% goes to platform upkeep</p>
+
+      <button
+        className="btn btn-primary btn-block support-btn"
+        onClick={handleSupport}
+        disabled={loading || !amount || parseFloat(amount) <= 0}
+      >
+        {loading ? 'Processing...' : 'Continue to Support'}
+      </button>
+    </div>
+  )
+}
+
+// ============================================================================
+// COMMUNITY PAGE
+// ============================================================================
+
+function CommunityPage() {
+  const { id } = useParams()
+  const [community, setCommunity] = useState(null)
+  const [events, setEvents] = useState([])
+  const [streams, setStreams] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('overview')
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    loadCommunity()
+  }, [id])
+
+  const loadCommunity = async () => {
+    try {
+      const [communityData, eventsData, streamsData] = await Promise.all([
+        api.communities.getOne(id),
+        api.events.getForCommunity(id),
+        api.streams.getForCommunity(id)
+      ])
+      setCommunity(communityData)
+      setEvents(eventsData.events || eventsData)
+      setStreams(streamsData)
+    } catch (err) {
+      console.error('Failed to load community:', err)
+    }
+    setLoading(false)
+  }
+
+  if (loading) return <div className="loading">Loading...</div>
+  if (!community) return <div className="error-page">Community not found</div>
+
+  const liveStream = streams.find(s => s.isLive)
+
+  return (
+    <div className="community-page">
+      {/* Clean Header */}
+      <div className="community-header-clean">
+        <div className="community-header-left">
+          <StarOfDavid size={40} color="var(--primary)" />
+          <div>
+            <h1>{community.name}</h1>
+            <p className="community-location">{community.location || community.city || 'City, State'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="tabs">
+        <button className={activeTab === 'overview' ? 'active' : ''} onClick={() => setActiveTab('overview')}>Overview</button>
+        <button className={activeTab === 'livestream' ? 'active' : ''} onClick={() => setActiveTab('livestream')}>Livestream</button>
+        <button className={activeTab === 'community' ? 'active' : ''} onClick={() => setActiveTab('community')}>Community</button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="tab-content-wrapper">
+        {activeTab === 'overview' && (
+          <div className="overview-two-col">
+            {/* Main Content */}
+            <div className="overview-main">
+              <LiveStreamPlayer stream={liveStream} />
+              <SupportWidget community={community} communityId={id} onActivated={loadCommunity} />
+            </div>
+
+            {/* Sidebar */}
+            <div className="overview-sidebar">
+              <UpcomingEventsSidebar events={events} />
+              <MiniCalendar events={events} />
+              <RecentlyAddedSidebar streams={streams} />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'livestream' && (
+          <StreamsTab streams={streams} community={community} />
+        )}
+
+        {activeTab === 'community' && (
+          <div className="community-tab-content">
+            {community.messageOfDay && (
+              <div className="message-of-day-card">
+                <h4>Message of the Day</h4>
+                <p>"{community.messageOfDay}"</p>
+              </div>
+            )}
+            <div className="about-section">
+              <h4>About</h4>
+              <p>{community.aboutText || community.shortDescription || 'No description available.'}</p>
+            </div>
+            {!community.isViewOnly && (
+              <MessagesTab communityId={id} communityName={community.name} />
+            )}
+            <EventsTab events={events} isViewOnly={community.isViewOnly} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ActivateAccessPanel is replaced by SupportWidget in the new overview layout
+
+// ============================================================================
+// EVENTS TAB
+// ============================================================================
+
+function EventsTab({ events, isViewOnly }) {
+  if (isViewOnly) {
+    return (
+      <div className="view-only-message">
+        <p>🔒 Activate Active Access to view the community calendar and events</p>
+      </div>
+    )
+  }
+
+  if (events.length === 0) {
+    return <div className="empty-state">No upcoming events</div>
+  }
+
+  return (
+    <div className="events-list">
+      {events.map(event => (
+        <div key={event.id} className="event-card">
+          <div className="event-date">
+            <span className="month">{new Date(event.startsAt).toLocaleDateString('en', { month: 'short' })}</span>
+            <span className="day">{new Date(event.startsAt).getDate()}</span>
+          </div>
+          <div className="event-info">
+            <h4>{event.title}</h4>
+            <p className="event-time">
+              {new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}
+              {event.location && ` • ${event.location}`}
+              {event.isVirtual && ' • Virtual'}
+            </p>
+            {event.description && <p className="event-description">{event.description}</p>}
+          </div>
+          <a href={api.events.exportIcs(event.id)} className="btn btn-sm btn-outline" download>
+            📅 Add to Calendar
+          </a>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ============================================================================
+// STREAMS TAB
+// ============================================================================
+
+function StreamsTab({ streams, community }) {
+  const liveStream = streams.find(s => s.isLive)
+
+  return (
+    <div className="streams-tab">
+      {liveStream && (
+        <div className="live-stream-card">
+          <span className="live-badge">🔴 LIVE</span>
+          <h4>{liveStream.title}</h4>
+          <p>{liveStream.currentViewers} watching</p>
+          <button className="btn btn-primary">Watch Now</button>
+        </div>
+      )}
+
+      <h4>Upcoming & Past Streams</h4>
+      {streams.length === 0 ? (
+        <div className="empty-state">No streams scheduled</div>
+      ) : (
+        <div className="streams-list">
+          {streams.filter(s => !s.isLive).map(stream => (
+            <div key={stream.id} className="stream-card">
+              <div className="stream-info">
+                <h5>{stream.title}</h5>
+                {stream.scheduledFor && (
+                  <p className="stream-time">
+                    {new Date(stream.scheduledFor).toLocaleString()}
+                  </p>
+                )}
+                {stream.recordingUrl && (
+                  <div className="recording-section">
+                    {community.hasActiveAccess ? (
+                      <a href={stream.recordingUrl} className="btn btn-sm btn-primary">▶ Watch Recording</a>
+                    ) : (
+                      <p className="gated-message">🔒 Active Access required to watch recording</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// MESSAGES TAB
+// ============================================================================
+
+function MessagesTab({ communityId, communityName }) {
+  const [threads, setThreads] = useState([])
+  const [selectedThread, setSelectedThread] = useState(null)
+  const [messages, setMessages] = useState([])
+  const [newMessage, setNewMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadThreads()
+  }, [])
+
+  const loadThreads = async () => {
+    try {
+      const data = await api.messages.getThreads()
+      const communityThreads = data.filter(t => t.communityId === communityId)
+      setThreads(communityThreads)
+      if (communityThreads.length > 0) {
+        selectThread(communityThreads[0])
+      }
+    } catch (err) {
+      console.error('Failed to load threads:', err)
+    }
+    setLoading(false)
+  }
+
+  const selectThread = async (thread) => {
+    setSelectedThread(thread)
+    try {
+      const data = await api.messages.getThread(thread.id)
+      setMessages(data.messages)
+    } catch (err) {
+      console.error('Failed to load messages:', err)
+    }
+  }
+
+  const sendMessage = async (e) => {
+    e.preventDefault()
+    if (!newMessage.trim()) return
+
+    try {
+      if (selectedThread) {
+        await api.messages.sendMessage(selectedThread.id, newMessage)
+        selectThread(selectedThread)
+      } else {
+        const result = await api.messages.startThread(communityId, newMessage)
+        loadThreads()
+      }
+      setNewMessage('')
+    } catch (err) {
+      console.error('Failed to send message:', err)
+    }
+  }
+
+  if (loading) return <div className="loading">Loading messages...</div>
+
+  return (
+    <div className="messages-tab">
+      <div className="messages-container">
+        {messages.length === 0 && !selectedThread ? (
+          <div className="empty-messages">
+            <p>No messages yet. Start a conversation with the community.</p>
+          </div>
+        ) : (
+          <div className="messages-list">
+            {messages.map(msg => (
+              <div key={msg.id} className={`message ${msg.isFromAdmin ? 'from-admin' : 'from-me'}`}>
+                <div className="message-content">{msg.content}</div>
+                <div className="message-meta">
+                  <span className="sender">{msg.senderName}</span>
+                  <span className="time">{new Date(msg.createdAt).toLocaleString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form className="message-form" onSubmit={sendMessage}>
+          <input
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder={`Message ${communityName}...`}
+          />
+          <button type="submit" className="btn btn-primary">Send</button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// CALENDAR PAGE (Aggregated)
+// ============================================================================
+
+function CalendarPage() {
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadCalendar()
+  }, [])
+
+  const loadCalendar = async () => {
+    try {
+      const data = await api.events.getMyCalendar()
+      setEvents(data)
+    } catch (err) {
+      console.error('Failed to load calendar:', err)
+    }
+    setLoading(false)
+  }
+
+  if (loading) return <div className="loading">Loading calendar...</div>
+
+  return (
+    <div className="calendar-page">
+      <h1>My Calendar</h1>
+      <p className="text-secondary">Upcoming events from all your communities</p>
+
+      {events.length === 0 ? (
+        <div className="empty-state">
+          <p>No upcoming events</p>
+          <p className="text-secondary">Events from your communities with Active Access will appear here</p>
+        </div>
+      ) : (
+        <div className="calendar-events">
+          {events.map(event => (
+            <div key={event.id} className="calendar-event-card">
+              <div className="event-date">
+                <span className="month">{new Date(event.startsAt).toLocaleDateString('en', { month: 'short' })}</span>
+                <span className="day">{new Date(event.startsAt).getDate()}</span>
+              </div>
+              <div className="event-details">
+                <h4>{event.title}</h4>
+                <p className="community-name">{event.communityName}</p>
+                <p className="event-time">
+                  {new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// MESSAGES PAGE (All Threads)
+// ============================================================================
+
+function MessagesPage() {
+  const [threads, setThreads] = useState([])
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    loadThreads()
+  }, [])
+
+  const loadThreads = async () => {
+    try {
+      const data = await api.messages.getThreads()
+      setThreads(data)
+    } catch (err) {
+      console.error('Failed to load threads:', err)
+    }
+    setLoading(false)
+  }
+
+  if (loading) return <div className="loading">Loading messages...</div>
+
+  return (
+    <div className="messages-page">
+      <h1>Messages</h1>
+      
+      {threads.length === 0 ? (
+        <div className="empty-state">
+          <p>No messages yet</p>
+          <p className="text-secondary">Start a conversation from a community page</p>
+        </div>
+      ) : (
+        <div className="threads-list">
+          {threads.map(thread => (
+            <div 
+              key={thread.id} 
+              className={`thread-card ${thread.unreadCount > 0 ? 'unread' : ''}`}
+              onClick={() => navigate(`/community/${thread.communityId}?tab=messages`)}
+            >
+              <div className="thread-info">
+                <h4>{thread.communityName}</h4>
+                <p className="last-message">{thread.lastMessage}</p>
+              </div>
+              <div className="thread-meta">
+                {thread.unreadCount > 0 && (
+                  <span className="unread-badge">{thread.unreadCount}</span>
+                )}
+                <span className="time">{new Date(thread.lastMessageAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// MAIN APP
+// ============================================================================
+
+function App() {
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
+    const token = getToken()
+    if (token) {
+      try {
+        const userData = await api.auth.me()
+        setUser(userData)
+      } catch (err) {
+        setToken(null)
+      }
+    }
+    setLoading(false)
+  }
+
+  const handleLogin = (userData) => {
+    setUser(userData)
+  }
+
+  const handleLogout = () => {
+    setToken(null)
+    setUser(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <DakLogo size={64} />
+        <p>Loading...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="app">
+      <TopNav user={user} onLogout={handleLogout} />
+      
+      <main className="main-content">
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/landing" element={<LandingPage />} />
+          <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage onLogin={handleLogin} />} />
+          <Route path="/join/:inviteLink" element={<RegisterPage onLogin={handleLogin} />} />
+          
+          {/* Protected Routes */}
+          <Route path="/" element={user ? <HomePage user={user} /> : <LandingPage />} />
+          <Route path="/community/:id" element={user ? <CommunityPage /> : <Navigate to="/login" />} />
+          <Route path="/calendar" element={user ? <CalendarPage /> : <Navigate to="/login" />} />
+          <Route path="/messages" element={user ? <MessagesPage /> : <Navigate to="/login" />} />
+          
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </main>
+    </div>
+  )
+}
+
+export default App

@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dak
+      POSTGRES_PASSWORD: dak_password
+      POSTGRES_DB: dak
+    volumes:
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dak"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./api
+    environment:
+      DATABASE_URL: postgres://dak:dak_password@db:5432/dak
+      JWT_SECRET: dak-mvp-v3-secret-key
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  admin:
+    build: ./admin
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+
+  institute:
+    build: ./institute
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+    ports:
+      - "3002:80"
+    depends_on:
+      - api
+
+  user:
+    build: ./user
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+    ports:
+      - "3003:5173"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

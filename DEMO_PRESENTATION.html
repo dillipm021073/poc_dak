@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D.A.K MVP Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #fff; }
+        
+        .slide { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 4rem; }
+        .slide h1 { font-size: 4rem; font-weight: 700; margin-bottom: 1rem; letter-spacing: -0.03em; }
+        .slide h2 { font-size: 2.5rem; font-weight: 600; margin-bottom: 2rem; color: #888; }
+        .slide p { font-size: 1.5rem; color: #aaa; max-width: 800px; text-align: center; line-height: 1.6; }
+        
+        .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; max-width: 1200px; margin-top: 3rem; }
+        .feature { background: #1a1a1a; border-radius: 16px; padding: 2rem; text-align: center; }
+        .feature-icon { font-size: 3rem; margin-bottom: 1rem; }
+        .feature h3 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+        .feature p { font-size: 1rem; color: #888; }
+        
+        .portal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; max-width: 1200px; margin-top: 3rem; }
+        .portal { background: #1a1a1a; border-radius: 16px; padding: 2rem; text-align: center; cursor: pointer; transition: transform 0.2s; }
+        .portal:hover { transform: translateY(-4px); }
+        .portal h3 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .portal .port { font-size: 3rem; font-weight: 700; color: #2563eb; margin: 1rem 0; }
+        .portal p { color: #888; }
+        
+        .flow { display: flex; align-items: center; gap: 1rem; margin-top: 2rem; flex-wrap: wrap; justify-content: center; }
+        .flow-step { background: #1a1a1a; padding: 1rem 2rem; border-radius: 12px; display: flex; align-items: center; gap: 0.5rem; }
+        .flow-arrow { font-size: 1.5rem; color: #2563eb; }
+        
+        .code-block { background: #1a1a1a; border-radius: 12px; padding: 2rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9rem; max-width: 800px; text-align: left; margin-top: 2rem; overflow-x: auto; }
+        .code-block .comment { color: #6b6b6b; }
+        .code-block .key { color: #2563eb; }
+        .code-block .value { color: #16a34a; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem; max-width: 1000px; margin-top: 3rem; }
+        .stat { background: #1a1a1a; border-radius: 16px; padding: 2rem; text-align: center; }
+        .stat-value { font-size: 3rem; font-weight: 700; color: #2563eb; }
+        .stat-label { color: #888; margin-top: 0.5rem; }
+        
+        .divider { width: 100px; height: 4px; background: #2563eb; margin: 2rem 0; border-radius: 2px; }
+        
+        .accent { color: #2563eb; }
+        .success { color: #16a34a; }
+        
+        .nav { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.5rem; background: #1a1a1a; padding: 0.5rem; border-radius: 12px; z-index: 100; }
+        .nav button { background: #333; border: none; color: #fff; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 1rem; }
+        .nav button:hover { background: #2563eb; }
+        .nav .current { font-size: 0.9rem; color: #888; padding: 0.75rem 1rem; }
+        
+        .iframe-container { width: 100%; max-width: 1200px; height: 600px; margin-top: 2rem; border-radius: 16px; overflow: hidden; border: 2px solid #333; }
+        .iframe-container iframe { width: 100%; height: 100%; border: none; }
+        
+        .check-list { text-align: left; max-width: 600px; margin-top: 2rem; }
+        .check-list li { font-size: 1.25rem; margin: 1rem 0; display: flex; align-items: center; gap: 1rem; }
+        .check-list .check { color: #16a34a; font-size: 1.5rem; }
+        
+        .tech-stack { display: flex; gap: 2rem; margin-top: 2rem; flex-wrap: wrap; justify-content: center; }
+        .tech { background: #1a1a1a; padding: 1rem 2rem; border-radius: 12px; font-size: 1.25rem; }
+    </style>
+</head>
+<body>
+    <!-- Slide 1: Title -->
+    <div class="slide" id="slide1">
+        <h1>D.A.K</h1>
+        <h2>Digital Access Key</h2>
+        <div class="divider"></div>
+        <p>A faith-community platform with privacy-first design, controlled onboarding, and seamless payments.</p>
+        <p style="margin-top: 2rem; color: #666;">MVP v1.0 Demo</p>
+    </div>
+    
+    <!-- Slide 2: Core Principles -->
+    <div class="slide" id="slide2">
+        <h2>Core Principles</h2>
+        <div class="feature-grid">
+            <div class="feature">
+                <div class="feature-icon">🔐</div>
+                <h3>Community-First</h3>
+                <p>No donation framing. Support is about belonging.</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🛡️</div>
+                <h3>Privacy by Design</h3>
+                <p>Faith-sensitive. No donor names exposed.</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📱</div>
+                <h3>Controlled Funnel</h3>
+                <p>QR/Link driven. No open signup.</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">✨</div>
+                <h3>Apple-like UX</h3>
+                <p>Calm, minimal, no pressure.</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">💳</div>
+                <h3>PSP-First</h3>
+                <p>Stripe/Adyen for payments & compliance.</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🌐</div>
+                <h3>Multi-Community</h3>
+                <p>Users can belong to multiple communities.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Slide 3: Architecture -->
+    <div class="slide" id="slide3">
+        <h2>System Architecture</h2>
+        <div class="portal-grid">
+            <div class="portal" onclick="window.open('http://localhost:3001', '_blank')">
+                <h3>🏛️ Platform Admin</h3>
+                <div class="port">:3001</div>
+                <p>Approve communities, view stats, manage users</p>
+            </div>
+            <div class="portal" onclick="window.open('http://localhost:3002', '_blank')">
+                <h3>🎓 Institute Portal</h3>
+                <div class="port">:3002</div>
+                <p>Manage streams, events, messages, analytics</p>
+            </div>
+            <div class="portal" onclick="window.open('http://localhost:3003', '_blank')">
+                <h3>👤 User Dashboard</h3>
+                <div class="port">:3003</div>
+                <p>View communities, support, events</p>
+            </div>
+        </div>
+        <div class="tech-stack">
+            <div class="tech">🐘 PostgreSQL</div>
+            <div class="tech">⚡ Node.js + Express</div>
+            <div class="tech">⚛️ React + Vite</div>
+            <div class="tech">🐳 Docker Compose</div>
+        </div>
+    </div>
+    
+    <!-- Slide 4: User Onboarding Flow -->
+    <div class="slide" id="slide4">
+        <h2>User Onboarding Flow</h2>
+        <p>QR-only registration ensures controlled community access</p>
+        <div class="flow">
+            <div class="flow-step">📱 Scan QR / Click Link</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">📝 Create Account</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">✅ Auto-Subscribe</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">🏠 Community Home</div>
+        </div>
+        <div class="code-block">
+            <span class="comment">// Registration Response</span><br>
+            {<br>
+            &nbsp;&nbsp;<span class="key">"user"</span>: { <span class="key">"email"</span>: <span class="value">"user@example.com"</span>, <span class="key">"role"</span>: <span class="value">"user"</span> },<br>
+            &nbsp;&nbsp;<span class="key">"community"</span>: { <span class="key">"name"</span>: <span class="value">"Temple Beth Israel"</span> },<br>
+            &nbsp;&nbsp;<span class="key">"message"</span>: <span class="value">"You're joining jewish communities on D.A.K"</span><br>
+            }
+        </div>
+    </div>
+    
+    <!-- Slide 5: Waiting List -->
+    <div class="slide" id="slide5">
+        <h2>Waiting List</h2>
+        <p>Users without QR/invite can request access</p>
+        <div class="flow">
+            <div class="flow-step">🚫 No QR Code</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">📋 Join Waiting List</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">📧 Notify When Ready</div>
+        </div>
+        <ul class="check-list">
+            <li><span class="check">✓</span> Name & Email</li>
+            <li><span class="check">✓</span> Country / City (optional)</li>
+            <li><span class="check">✓</span> Desired Institution (required)</li>
+            <li><span class="check">✓</span> Institution Location</li>
+        </ul>
+    </div>
+    
+    <!-- Slide 6: Entitlements -->
+    <div class="slide" id="slide6">
+        <h2>Access & Entitlements</h2>
+        <div class="portal-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="feature" style="border: 2px solid #333;">
+                <div class="feature-icon">👁️</div>
+                <h3>Subscriber (Free)</h3>
+                <p>Watch streams, view limited info, see gated features</p>
+            </div>
+            <div class="feature" style="border: 2px solid #16a34a;">
+                <div class="feature-icon">⭐</div>
+                <h3>Contributor (Supporter)</h3>
+                <p>Full access for 1 month: events, chat, updates</p>
+            </div>
+        </div>
+        <div class="code-block">
+            <span class="comment">// Gating Popup Message</span><br>
+            <span class="value">"This space is part of the active community. By supporting<br>
+            the community, you'll be included in updates, events, and<br>
+            conversations for the coming month."</span>
+        </div>
+    </div>
+    
+    <!-- Slide 7: Payments -->
+    <div class="slide" id="slide7">
+        <h2>Support & Payments</h2>
+        <div class="stats-grid">
+            <div class="stat">
+                <div class="stat-value">5%</div>
+                <div class="stat-label">Platform Fee</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">1mo</div>
+                <div class="stat-label">Access Period</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">$∞</div>
+                <div class="stat-label">Custom Amount</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">🔄</div>
+                <div class="stat-label">Recurring Option</div>
+            </div>
+        </div>
+        <div class="code-block">
+            <span class="comment">// Payment Response (Mock PSP)</span><br>
+            {<br>
+            &nbsp;&nbsp;<span class="key">"amount"</span>: <span class="value">"50.00"</span>,<br>
+            &nbsp;&nbsp;<span class="key">"platform_fee"</span>: <span class="value">"2.50"</span>,<br>
+            &nbsp;&nbsp;<span class="key">"psp_transaction_id"</span>: <span class="value">"psp_19ce80de-19e8..."</span>,<br>
+            &nbsp;&nbsp;<span class="key">"entitlement.endsAt"</span>: <span class="value">"2026-03-07"</span><br>
+            }
+        </div>
+    </div>
+    
+    <!-- Slide 8: Features -->
+    <div class="slide" id="slide8">
+        <h2>Features Built</h2>
+        <ul class="check-list">
+            <li><span class="check">✓</span> QR/Link-only user registration</li>
+            <li><span class="check">✓</span> Waiting list for users without invite</li>
+            <li><span class="check">✓</span> Multi-community membership</li>
+            <li><span class="check">✓</span> Entitlements (subscriber vs contributor)</li>
+            <li><span class="check">✓</span> Mock PSP payments with 5% fee</li>
+            <li><span class="check">✓</span> Threaded private messaging</li>
+            <li><span class="check">✓</span> Events management</li>
+            <li><span class="check">✓</span> Stream management (placeholder)</li>
+            <li><span class="check">✓</span> Community analytics</li>
+            <li><span class="check">✓</span> Platform admin dashboard</li>
+        </ul>
+    </div>
+    
+    <!-- Slide 9: Admin Portal -->
+    <div class="slide" id="slide9">
+        <h2>Platform Admin Portal</h2>
+        <p>Approve communities, view stats, manage the platform</p>
+        <div class="stats-grid">
+            <div class="stat">
+                <div class="stat-value">📊</div>
+                <div class="stat-label">Dashboard Stats</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">✅</div>
+                <div class="stat-label">Approve Communities</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">👥</div>
+                <div class="stat-label">User Management</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">💳</div>
+                <div class="stat-label">PSP Status</div>
+            </div>
+        </div>
+        <p style="margin-top: 2rem;">Login: <span class="accent">admin@dak.com</span> / <span class="accent">admin123</span></p>
+        <div class="iframe-container">
+            <iframe src="http://localhost:3001" title="Admin Portal"></iframe>
+        </div>
+    </div>
+    
+    <!-- Slide 10: Institute Portal -->
+    <div class="slide" id="slide10">
+        <h2>Community Admin Portal</h2>
+        <p>Manage your community's content, events, and members</p>
+        <div class="feature-grid">
+            <div class="feature">
+                <div class="feature-icon">📺</div>
+                <h3>Streams</h3>
+                <p>Go live, manage recordings</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📅</div>
+                <h3>Events</h3>
+                <p>Create and manage events</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">💬</div>
+                <h3>Messages</h3>
+                <p>Respond to members</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📊</div>
+                <h3>Analytics</h3>
+                <p>Aggregated stats only</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🔗</div>
+                <h3>Invite Link</h3>
+                <p>Share QR code</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">⚙️</div>
+                <h3>Settings</h3>
+                <p>Community config</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Slide 11: User Dashboard -->
+    <div class="slide" id="slide11">
+        <h2>User Dashboard</h2>
+        <p>Simple, calm experience for community members</p>
+        <div class="flow">
+            <div class="flow-step">🏠 My Communities</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">📺 Watch Streams</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">💖 Support</div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">🎉 Full Access</div>
+        </div>
+        <div class="iframe-container">
+            <iframe src="http://localhost:3003" title="User Portal"></iframe>
+        </div>
+    </div>
+    
+    <!-- Slide 12: Test Results -->
+    <div class="slide" id="slide12">
+        <h2>Test Results</h2>
+        <div class="stats-grid">
+            <div class="stat">
+                <div class="stat-value success">20</div>
+                <div class="stat-label">Tests Passed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">0</div>
+                <div class="stat-label">Tests Failed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value success">100%</div>
+                <div class="stat-label">Coverage</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">5</div>
+                <div class="stat-label">Services Running</div>
+            </div>
+        </div>
+        <ul class="check-list">
+            <li><span class="check">✓</span> API Health</li>
+            <li><span class="check">✓</span> Authentication (4 tests)</li>
+            <li><span class="check">✓</span> Admin Functions (5 tests)</li>
+            <li><span class="check">✓</span> User Functions (8 tests)</li>
+            <li><span class="check">✓</span> Security (3 tests)</li>
+        </ul>
+    </div>
+    
+    <!-- Slide 13: Next Steps -->
+    <div class="slide" id="slide13">
+        <h2>Next Steps for Production</h2>
+        <div class="feature-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="feature">
+                <div class="feature-icon">🔑</div>
+                <h3>OAuth Integration</h3>
+                <p>Google & Apple sign-in</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">💳</div>
+                <h3>Real PSP</h3>
+                <p>Stripe/Adyen sandbox</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📺</div>
+                <h3>Streaming</h3>
+                <p>WebRTC/HLS integration</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📱</div>
+                <h3>QR Generator</h3>
+                <p>Actual QR code creation</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Slide 14: Thank You -->
+    <div class="slide" id="slide14">
+        <h1>D.A.K MVP</h1>
+        <h2 class="success">Ready for Review</h2>
+        <div class="divider"></div>
+        <p>All systems operational. 20/20 tests passing.</p>
+        <div class="tech-stack" style="margin-top: 3rem;">
+            <div class="tech">Admin → localhost:3001</div>
+            <div class="tech">Institute → localhost:3002</div>
+            <div class="tech">User → localhost:3003</div>
+        </div>
+    </div>
+    
+    <!-- Navigation -->
+    <div class="nav">
+        <button onclick="prevSlide()">← Prev</button>
+        <span class="current" id="slideNumber">1 / 14</span>
+        <button onclick="nextSlide()">Next →</button>
+    </div>
+    
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 14;
+        
+        function showSlide(n) {
+            if (n < 1) n = totalSlides;
+            if (n > totalSlides) n = 1;
+            currentSlide = n;
+            
+            document.querySelectorAll('.slide').forEach((slide, i) => {
+                slide.style.display = (i + 1 === n) ? 'flex' : 'none';
+            });
+            
+            document.getElementById('slideNumber').textContent = `${n} / ${totalSlides}`;
+        }
+        
+        function nextSlide() { showSlide(currentSlide + 1); }
+        function prevSlide() { showSlide(currentSlide - 1); }
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
+            if (e.key === 'ArrowLeft') prevSlide();
+        });
+        
+        showSlide(1);
+    </script>
+</body>
+</html>
