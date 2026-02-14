@@ -306,6 +306,77 @@ function Sidebar({ activeTab, onTabChange, onLogout }) {
 }
 
 // ============================================================================
+// CSV EXPORT UTILITY
+// ============================================================================
+
+function exportToCSV(data, columns, filename) {
+  if (!data || data.length === 0) { alert('No data to export'); return }
+  const header = columns.map(c => c.label).join(',')
+  const rows = data.map(row =>
+    columns.map(c => {
+      let val = typeof c.accessor === 'function' ? c.accessor(row) : row[c.accessor]
+      if (val === null || val === undefined) val = ''
+      val = String(val).replace(/"/g, '""')
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) val = `"${val}"`
+      return val
+    }).join(',')
+  )
+  const csv = [header, ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+// ============================================================================
+// DATE RANGE FILTER COMPONENT
+// ============================================================================
+
+function DateRangeFilter({ startDate, endDate, onStartChange, onEndChange, onApply, onClear }) {
+  return (
+    <div className="date-range-filter" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      <input
+        type="date"
+        value={startDate}
+        onChange={(e) => onStartChange(e.target.value)}
+        style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--gray-300, #d1d5db)', fontSize: '13px' }}
+      />
+      <span style={{ color: '#6b7280', fontSize: '13px' }}>to</span>
+      <input
+        type="date"
+        value={endDate}
+        onChange={(e) => onEndChange(e.target.value)}
+        style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--gray-300, #d1d5db)', fontSize: '13px' }}
+      />
+      <button className="btn btn-sm btn-primary" onClick={onApply}>Apply</button>
+      {(startDate || endDate) && (
+        <button className="btn btn-sm btn-outline" onClick={onClear}>Clear</button>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// EXPORT BUTTON COMPONENT
+// ============================================================================
+
+function ExportButton({ onClick, disabled }) {
+  return (
+    <button
+      className="btn btn-sm btn-outline"
+      onClick={onClick}
+      disabled={disabled}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+    >
+      Export CSV
+    </button>
+  )
+}
+
+// ============================================================================
 // DASHBOARD TAB
 // ============================================================================
 
@@ -330,11 +401,36 @@ function DashboardTab() {
   if (loading) return <div className="loading">Loading dashboard...</div>
   if (!stats) return <div className="error">Failed to load stats</div>
 
+  const handleExportDashboard = () => {
+    const rows = [
+      { metric: 'Total Communities', value: stats.communities.total },
+      { metric: 'Active Communities', value: stats.communities.active },
+      { metric: 'Pending Communities', value: stats.communities.pending },
+      { metric: 'Suspended Communities', value: stats.communities.suspended },
+      { metric: 'Total Users', value: stats.users.total },
+      { metric: 'Members', value: stats.users.members },
+      { metric: 'Community Admins', value: stats.users.communityAdmins },
+      { metric: 'Active Subscribers', value: stats.activeSubscribers },
+      { metric: 'Total GMV', value: '$' + stats.gmv.total.toFixed(2) },
+      { metric: 'Monthly GMV', value: '$' + stats.gmv.monthlyGmv.toFixed(2) },
+      { metric: 'Platform Revenue', value: '$' + stats.gmv.platformRevenue.toFixed(2) },
+      ...Object.entries(stats.communitiesByType).map(([type, count]) => ({ metric: `Communities - ${type}`, value: count })),
+      ...Object.entries(stats.waitingListByType).map(([type, count]) => ({ metric: `Waiting List - ${type}`, value: count }))
+    ]
+    exportToCSV(rows, [
+      { label: 'Metric', accessor: 'metric' },
+      { label: 'Value', accessor: 'value' }
+    ], 'dak_dashboard_summary')
+  }
+
   return (
     <div className="dashboard-tab">
       <div className="page-header">
-        <h1>Platform Dashboard</h1>
-        <p>Overview of D.A.K platform metrics</p>
+        <div>
+          <h1>Platform Dashboard</h1>
+          <p>Overview of D.A.K platform metrics</p>
+        </div>
+        <ExportButton onClick={handleExportDashboard} />
       </div>
 
       <div className="stats-grid">
@@ -430,20 +526,41 @@ function DashboardTab() {
 function CommunitiesTab() {
   const [communities, setCommunities] = useState([])
   const [filter, setFilter] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [appliedDates, setAppliedDates] = useState({ startDate: '', endDate: '' })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadCommunities()
-  }, [filter])
+  }, [filter, appliedDates])
 
   const loadCommunities = async () => {
     try {
-      const data = await api.admin.getCommunities(filter)
+      const params = {}
+      if (filter) params.status = filter
+      if (appliedDates.startDate) params.startDate = appliedDates.startDate
+      if (appliedDates.endDate) params.endDate = appliedDates.endDate
+      const data = await api.admin.getCommunities(params)
       setCommunities(data)
     } catch (err) {
       console.error('Failed to load communities:', err)
     }
     setLoading(false)
+  }
+
+  const handleExport = () => {
+    exportToCSV(communities, [
+      { label: 'Name', accessor: 'name' },
+      { label: 'Type', accessor: 'communityType' },
+      { label: 'Country', accessor: 'country' },
+      { label: 'Status', accessor: 'status' },
+      { label: 'Admin Name', accessor: 'adminName' },
+      { label: 'Admin Email', accessor: 'adminEmail' },
+      { label: 'Members', accessor: 'memberCount' },
+      { label: 'Subscribers', accessor: 'subscriberCount' },
+      { label: 'Created', accessor: (r) => new Date(r.createdAt).toLocaleDateString() }
+    ], 'dak_communities')
   }
 
   const handleApprove = async (id) => {
@@ -484,32 +601,24 @@ function CommunitiesTab() {
           <h1>Communities</h1>
           <p>Manage platform communities</p>
         </div>
-        <div className="filter-buttons">
-          <button 
-            className={`btn btn-sm ${filter === '' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setFilter('')}
-          >
-            All
-          </button>
-          <button 
-            className={`btn btn-sm ${filter === 'pending' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setFilter('pending')}
-          >
-            Pending
-          </button>
-          <button 
-            className={`btn btn-sm ${filter === 'active' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setFilter('active')}
-          >
-            Active
-          </button>
-          <button 
-            className={`btn btn-sm ${filter === 'suspended' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setFilter('suspended')}
-          >
-            Suspended
-          </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="filter-buttons">
+            {['', 'pending', 'active', 'suspended'].map(s => (
+              <button key={s} className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFilter(s)}>
+                {s || 'All'}
+              </button>
+            ))}
+          </div>
+          <ExportButton onClick={handleExport} disabled={communities.length === 0} />
         </div>
+      </div>
+      <div style={{ marginBottom: '1rem' }}>
+        <DateRangeFilter
+          startDate={startDate} endDate={endDate}
+          onStartChange={setStartDate} onEndChange={setEndDate}
+          onApply={() => setAppliedDates({ startDate, endDate })}
+          onClear={() => { setStartDate(''); setEndDate(''); setAppliedDates({ startDate: '', endDate: '' }) }}
+        />
       </div>
 
       {communities.length === 0 ? (
@@ -595,15 +704,23 @@ function CommunitiesTab() {
 
 function UsersTab() {
   const [users, setUsers] = useState([])
+  const [roleFilter, setRoleFilter] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [appliedDates, setAppliedDates] = useState({ startDate: '', endDate: '' })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadUsers()
-  }, [])
+  }, [roleFilter, appliedDates])
 
   const loadUsers = async () => {
     try {
-      const data = await api.admin.getUsers()
+      const params = {}
+      if (roleFilter) params.role = roleFilter
+      if (appliedDates.startDate) params.startDate = appliedDates.startDate
+      if (appliedDates.endDate) params.endDate = appliedDates.endDate
+      const data = await api.admin.getUsers(params)
       setUsers(data)
     } catch (err) {
       console.error('Failed to load users:', err)
@@ -611,13 +728,45 @@ function UsersTab() {
     setLoading(false)
   }
 
+  const handleExport = () => {
+    exportToCSV(users, [
+      { label: 'Name', accessor: (r) => r.name || 'Unnamed' },
+      { label: 'Email', accessor: 'email' },
+      { label: 'Role', accessor: (r) => r.role.replace('_', ' ') },
+      { label: 'Network', accessor: (r) => r.communityType || '' },
+      { label: 'Communities', accessor: 'communityCount' },
+      { label: 'Active Access', accessor: 'activeAccessCount' },
+      { label: 'Joined', accessor: (r) => new Date(r.createdAt).toLocaleDateString() }
+    ], 'dak_users')
+  }
+
   if (loading) return <div className="loading">Loading users...</div>
 
   return (
     <div className="users-tab">
       <div className="page-header">
-        <h1>Users</h1>
-        <p>Platform user management</p>
+        <div>
+          <h1>Users</h1>
+          <p>Platform user management</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="filter-buttons">
+            {[['', 'All'], ['user', 'Devotees'], ['community_admin', 'Admins']].map(([val, label]) => (
+              <button key={val} className={`btn btn-sm ${roleFilter === val ? 'btn-primary' : 'btn-outline'}`} onClick={() => setRoleFilter(val)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <ExportButton onClick={handleExport} disabled={users.length === 0} />
+        </div>
+      </div>
+      <div style={{ marginBottom: '1rem' }}>
+        <DateRangeFilter
+          startDate={startDate} endDate={endDate}
+          onStartChange={setStartDate} onEndChange={setEndDate}
+          onApply={() => setAppliedDates({ startDate, endDate })}
+          onClear={() => { setStartDate(''); setEndDate(''); setAppliedDates({ startDate: '', endDate: '' }) }}
+        />
       </div>
 
       {users.length === 0 ? (
@@ -668,22 +817,69 @@ function UsersTab() {
 // ============================================================================
 
 function WaitingListTab() {
-  const [entries, setEntries] = useState([])
+  const [waitingList, setWaitingList] = useState([])
   const [filter, setFilter] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [appliedDates, setAppliedDates] = useState({ startDate: '', endDate: '' })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadWaitingList()
-  }, [filter])
+    loadData()
+  }, [filter, appliedDates])
 
-  const loadWaitingList = async () => {
+  const loadData = async () => {
     try {
-      const data = await api.admin.getWaitingList(filter)
-      setEntries(data)
+      const params = {}
+      if (filter) params.communityType = filter
+      if (appliedDates.startDate) params.startDate = appliedDates.startDate
+      if (appliedDates.endDate) params.endDate = appliedDates.endDate
+      const data = await api.admin.getWaitingList(params)
+      setWaitingList(Array.isArray(data) ? data : data.waitingList || [])
     } catch (err) {
       console.error('Failed to load waiting list:', err)
     }
     setLoading(false)
+  }
+
+  const handleExport = () => {
+    exportToCSV(waitingList, [
+      { label: 'Email', accessor: 'email' },
+      { label: 'Community Type', accessor: 'communityType' },
+      { label: 'Recommended Institution', accessor: (r) => r.recommendedInstitution || '' },
+      { label: 'Status', accessor: 'status' },
+      { label: 'Date', accessor: (r) => new Date(r.createdAt).toLocaleDateString() }
+    ], 'dak_waiting_list')
+  }
+
+  const handleApprove = async (id) => {
+    try {
+      const result = await api.admin.approveWaitingListEntry(id)
+      alert(result.message)
+      loadData()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const handleReject = async (id) => {
+    if (!confirm('Reject this application?')) return
+    try {
+      await api.admin.rejectWaitingListEntry(id)
+      loadData()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const handleRemove = async (id) => {
+    if (!confirm('Remove this entry from the waiting list?')) return
+    try {
+      await api.admin.removeWaitingListEntry(id)
+      loadData()
+    } catch (err) {
+      alert(err.message)
+    }
   }
 
   const communityTypes = ['', 'islam', 'christianity', 'hinduism', 'judaism']
@@ -695,22 +891,33 @@ function WaitingListTab() {
       <div className="page-header">
         <div>
           <h1>Waiting List</h1>
-          <p>Users waiting for community access</p>
+          <p>Approve or reject institute applications</p>
         </div>
-        <div className="filter-buttons">
-          {communityTypes.map(type => (
-            <button 
-              key={type}
-              className={`btn btn-sm ${filter === type ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setFilter(type)}
-            >
-              {type || 'All'}
-            </button>
-          ))}
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="filter-buttons">
+            {communityTypes.map(type => (
+              <button
+                key={type}
+                className={`btn btn-sm ${filter === type ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setFilter(type)}
+              >
+                {type || 'All'}
+              </button>
+            ))}
+          </div>
+          <ExportButton onClick={handleExport} disabled={waitingList.length === 0} />
         </div>
       </div>
+      <div style={{ marginBottom: '1rem' }}>
+        <DateRangeFilter
+          startDate={startDate} endDate={endDate}
+          onStartChange={setStartDate} onEndChange={setEndDate}
+          onApply={() => setAppliedDates({ startDate, endDate })}
+          onClear={() => { setStartDate(''); setEndDate(''); setAppliedDates({ startDate: '', endDate: '' }) }}
+        />
+      </div>
 
-      {entries.length === 0 ? (
+      {waitingList.length === 0 ? (
         <div className="empty-state">No waiting list entries</div>
       ) : (
         <div className="table-container">
@@ -721,15 +928,50 @@ function WaitingListTab() {
                 <th>Community Type</th>
                 <th>Recommended Institution</th>
                 <th>Date</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {entries.map(entry => (
+              {waitingList.map(entry => (
                 <tr key={entry.id}>
                   <td>{entry.email}</td>
                   <td className="capitalize">{entry.communityType}</td>
                   <td>{entry.recommendedInstitution || '—'}</td>
                   <td>{new Date(entry.createdAt).toLocaleDateString()}</td>
+                  <td>
+                    <span className={`status-badge ${entry.status}`}>
+                      {entry.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="action-buttons">
+                      {entry.status === 'pending' && (
+                        <>
+                          <button
+                            className="btn btn-sm btn-primary"
+                            onClick={() => handleApprove(entry.id)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline"
+                            style={{ color: '#dc2626', borderColor: '#dc2626' }}
+                            onClick={() => handleReject(entry.id)}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      <button
+                        className="btn btn-sm btn-outline"
+                        onClick={() => handleRemove(entry.id)}
+                        title="Remove from list"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -746,15 +988,23 @@ function WaitingListTab() {
 
 function PaymentsTab() {
   const [payments, setPayments] = useState([])
+  const [statusFilter, setStatusFilter] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [appliedDates, setAppliedDates] = useState({ startDate: '', endDate: '' })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadPayments()
-  }, [])
+  }, [statusFilter, appliedDates])
 
   const loadPayments = async () => {
     try {
-      const data = await api.admin.getPayments()
+      const params = {}
+      if (statusFilter) params.status = statusFilter
+      if (appliedDates.startDate) params.startDate = appliedDates.startDate
+      if (appliedDates.endDate) params.endDate = appliedDates.endDate
+      const data = await api.admin.getPayments(params)
       setPayments(data)
     } catch (err) {
       console.error('Failed to load payments:', err)
@@ -762,13 +1012,49 @@ function PaymentsTab() {
     setLoading(false)
   }
 
+  const handleExport = () => {
+    exportToCSV(payments, [
+      { label: 'User', accessor: 'userName' },
+      { label: 'Email', accessor: 'userEmail' },
+      { label: 'Community', accessor: 'communityName' },
+      { label: 'Amount ($)', accessor: (r) => r.amount.toFixed(2) },
+      { label: 'Currency', accessor: 'currency' },
+      { label: 'Days Granted', accessor: 'daysGranted' },
+      { label: 'Platform Fee ($)', accessor: (r) => r.platformFee.toFixed(2) },
+      { label: 'Fee %', accessor: 'platformFeePercent' },
+      { label: 'Status', accessor: 'status' },
+      { label: 'Transaction ID', accessor: (r) => r.pspTransactionId || '' },
+      { label: 'Date', accessor: (r) => new Date(r.createdAt).toLocaleDateString() }
+    ], 'dak_payments')
+  }
+
   if (loading) return <div className="loading">Loading payments...</div>
 
   return (
     <div className="payments-tab">
       <div className="page-header">
-        <h1>Payments</h1>
-        <p>Transaction history and platform fees</p>
+        <div>
+          <h1>Payments</h1>
+          <p>Transaction history and platform fees</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="filter-buttons">
+            {[['', 'All'], ['completed', 'Completed'], ['pending', 'Pending'], ['failed', 'Failed']].map(([val, label]) => (
+              <button key={val} className={`btn btn-sm ${statusFilter === val ? 'btn-primary' : 'btn-outline'}`} onClick={() => setStatusFilter(val)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <ExportButton onClick={handleExport} disabled={payments.length === 0} />
+        </div>
+      </div>
+      <div style={{ marginBottom: '1rem' }}>
+        <DateRangeFilter
+          startDate={startDate} endDate={endDate}
+          onStartChange={setStartDate} onEndChange={setEndDate}
+          onApply={() => setAppliedDates({ startDate, endDate })}
+          onClear={() => { setStartDate(''); setEndDate(''); setAppliedDates({ startDate: '', endDate: '' }) }}
+        />
       </div>
 
       {payments.length === 0 ? (

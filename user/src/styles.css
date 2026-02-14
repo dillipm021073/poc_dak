@@ -1965,6 +1965,129 @@ body {
 }
 
 /* ============================================================================
+   EVENT COLORS & MULTI-DAY INDICATORS
+   ============================================================================ */
+
+.multi-day-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.event-card.multi-day,
+.calendar-event-card.multi-day {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 10px,
+    rgba(0,0,0,0.02) 10px,
+    rgba(0,0,0,0.02) 20px
+  ), white;
+}
+
+.multi-day-indicator {
+  font-size: 11px;
+  display: block;
+  color: var(--gray-500);
+}
+
+/* ============================================================================
+   MINI CALENDAR ENHANCEMENTS
+   ============================================================================ */
+
+.mini-cal-indicators {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  min-height: 6px;
+  margin-top: 2px;
+}
+
+.mini-cal-bar {
+  width: 16px !important;
+  height: 4px !important;
+  border-radius: 2px !important;
+}
+
+/* ============================================================================
+   EVENT HOVER TOOLTIPS
+   ============================================================================ */
+
+.calendar-event-card,
+.event-card,
+.upcoming-event-item {
+  position: relative;
+}
+
+.event-tooltip {
+  display: none;
+  position: absolute;
+  z-index: 50;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--gray-900, #111827);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  min-width: 220px;
+  max-width: 320px;
+  pointer-events: none;
+}
+
+.event-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--gray-900, #111827);
+}
+
+.event-tooltip strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.event-tooltip span {
+  display: block;
+  font-size: 12px;
+  color: #d1d5db;
+  margin-bottom: 2px;
+}
+
+.event-tooltip p {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+  margin-bottom: 0;
+  line-height: 1.4;
+}
+
+.calendar-event-card:hover .event-tooltip,
+.event-card:hover .event-tooltip,
+.upcoming-event-item:hover .event-tooltip {
+  display: block;
+}
+
+.upcoming-event-item .event-tooltip {
+  left: 0;
+  transform: none;
+}
+
+.upcoming-event-item .event-tooltip::after {
+  left: 24px;
+  transform: none;
+}
+
+/* ============================================================================
    RESPONSIVE
    ============================================================================ */
 

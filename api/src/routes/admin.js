@@ -112,25 +112,37 @@ router.get('/stats', authenticateToken, platformAdminOnly, async (req, res) => {
 
 // Get all communities
 router.get('/communities', authenticateToken, platformAdminOnly, async (req, res) => {
-  const { status } = req.query;
+  const { status, startDate, endDate } = req.query;
   const pool = req.app.locals.pool;
 
   try {
     let query = `
-      SELECT c.*, 
+      SELECT c.*,
              ca.admin_name, ca.admin_email, ca.role_in_institution,
-             (SELECT COUNT(*) FROM community_memberships WHERE community_id = c.id) as member_count,
+             (SELECT COUNT(*) FROM community_memberships WHERE community_id = c.id AND status = 'approved') as member_count,
              (SELECT COUNT(*) FROM active_community_access WHERE community_id = c.id AND access_expires_at > NOW()) as subscriber_count
       FROM communities c
       LEFT JOIN community_admins ca ON ca.community_id = c.id
     `;
-    
+
+    const conditions = [];
     const params = [];
     if (status) {
-      query += ` WHERE c.status = $1`;
       params.push(status);
+      conditions.push(`c.status = $${params.length}`);
     }
-    
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`c.created_at >= $${params.length}::date`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`c.created_at < ($${params.length}::date + interval '1 day')`);
+    }
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
     query += ` ORDER BY c.created_at DESC`;
 
     const result = await pool.query(query, params);
@@ -258,19 +270,36 @@ router.post('/communities/:id/reactivate', authenticateToken, platformAdminOnly,
 
 // Get all users
 router.get('/users', authenticateToken, platformAdminOnly, async (req, res) => {
+  const { startDate, endDate, role } = req.query;
   const pool = req.app.locals.pool;
 
   try {
-    const result = await pool.query(
-      `SELECT 
+    let query = `
+      SELECT
         u.id, u.email, u.name, u.role, u.community_type, u.created_at,
         (SELECT COUNT(*) FROM community_memberships WHERE user_id = u.id) as community_count,
         (SELECT COUNT(*) FROM active_community_access WHERE user_id = u.id AND access_expires_at > NOW()) as active_access_count
-       FROM users u
-       WHERE u.role != 'platform_admin'
-       ORDER BY u.created_at DESC
-       LIMIT 100`
-    );
+      FROM users u
+    `;
+
+    const conditions = [`u.role != 'platform_admin'`];
+    const params = [];
+    if (role) {
+      params.push(role);
+      conditions.push(`u.role = $${params.length}`);
+    }
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`u.created_at >= $${params.length}::date`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`u.created_at < ($${params.length}::date + interval '1 day')`);
+    }
+    query += ` WHERE ${conditions.join(' AND ')}`;
+    query += ` ORDER BY u.created_at DESC LIMIT 500`;
+
+    const result = await pool.query(query, params);
 
     res.json(result.rows.map(user => ({
       id: user.id,
@@ -288,22 +317,28 @@ router.get('/users', authenticateToken, platformAdminOnly, async (req, res) => {
   }
 });
 
-// Get waiting list
+// Get waiting list (pending and rejected entries only - approved become communities)
 router.get('/waiting-list', authenticateToken, platformAdminOnly, async (req, res) => {
-  const { communityType } = req.query;
+  const { communityType, startDate, endDate } = req.query;
   const pool = req.app.locals.pool;
 
   try {
-    let query = `SELECT * FROM waiting_list`;
+    const conditions = [`status != 'approved'`];
     const params = [];
-    
     if (communityType) {
-      query += ` WHERE community_type = $1`;
       params.push(communityType);
+      conditions.push(`community_type = $${params.length}`);
     }
-    
-    query += ` ORDER BY created_at DESC`;
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`created_at >= $${params.length}::date`);
+    }
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`created_at < ($${params.length}::date + interval '1 day')`);
+    }
 
+    const query = `SELECT * FROM waiting_list WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC`;
     const result = await pool.query(query, params);
 
     res.json(result.rows.map(entry => ({
@@ -311,6 +346,7 @@ router.get('/waiting-list', authenticateToken, platformAdminOnly, async (req, re
       email: entry.email,
       recommendedInstitution: entry.recommended_institution,
       communityType: entry.community_type,
+      status: entry.status || 'pending',
       createdAt: entry.created_at
     })));
   } catch (err) {
@@ -319,9 +355,160 @@ router.get('/waiting-list', authenticateToken, platformAdminOnly, async (req, re
   }
 });
 
+// Approve waiting list entry (institute application) - creates the community
+router.post('/waiting-list/:id/approve', authenticateToken, platformAdminOnly, async (req, res) => {
+  const { id } = req.params;
+  const pool = req.app.locals.pool;
+
+  try {
+    const result = await pool.query(
+      `UPDATE waiting_list SET status = 'approved' WHERE id = $1 AND status = 'pending'
+       RETURNING email, recommended_institution, community_type`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Waiting list entry not found or already processed' });
+    }
+
+    const entry = result.rows[0];
+    const communityName = entry.recommended_institution || `New ${entry.community_type} Community`;
+    const inviteLink = communityName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+    // Check if community with this name already exists
+    const existing = await pool.query(
+      `SELECT id FROM communities WHERE LOWER(name) = LOWER($1)`,
+      [communityName]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.json({
+        success: true,
+        message: `Approved ${communityName} - community already exists in the system`
+      });
+    }
+
+    // Create the community as active (platform admin approved)
+    await pool.query(
+      `INSERT INTO communities (name, community_type, country, status, invite_link, short_description)
+       VALUES ($1, $2, 'United States', 'active', $3, $4)`,
+      [communityName, entry.community_type, inviteLink, `Applied by ${entry.email}`]
+    );
+
+    res.json({
+      success: true,
+      message: `Approved and created community "${communityName}"`
+    });
+  } catch (err) {
+    console.error('Approve waiting list error:', err);
+    res.status(500).json({ error: 'Failed to approve waiting list entry' });
+  }
+});
+
+// Reject waiting list entry
+router.post('/waiting-list/:id/reject', authenticateToken, platformAdminOnly, async (req, res) => {
+  const { id } = req.params;
+  const pool = req.app.locals.pool;
+
+  try {
+    const result = await pool.query(
+      `UPDATE waiting_list SET status = 'rejected' WHERE id = $1 AND status = 'pending'
+       RETURNING email, recommended_institution`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Waiting list entry not found or already processed' });
+    }
+
+    const entry = result.rows[0];
+    res.json({
+      success: true,
+      message: `Rejected ${entry.recommended_institution || entry.email}`
+    });
+  } catch (err) {
+    console.error('Reject waiting list error:', err);
+    res.status(500).json({ error: 'Failed to reject waiting list entry' });
+  }
+});
+
+// Remove waiting list entry
+router.delete('/waiting-list/:id', authenticateToken, platformAdminOnly, async (req, res) => {
+  const { id } = req.params;
+  const pool = req.app.locals.pool;
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM waiting_list WHERE id = $1 RETURNING email`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Waiting list entry not found' });
+    }
+
+    res.json({ success: true, message: `Removed ${result.rows[0].email} from waiting list` });
+  } catch (err) {
+    console.error('Remove waiting list error:', err);
+    res.status(500).json({ error: 'Failed to remove waiting list entry' });
+  }
+});
+
+// Reject community (delete pending community)
+router.post('/communities/:id/reject', authenticateToken, platformAdminOnly, async (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body;
+  const pool = req.app.locals.pool;
+
+  try {
+    // Get community details before deletion
+    const communityResult = await pool.query(
+      `SELECT name, status FROM communities WHERE id = $1`,
+      [id]
+    );
+
+    if (communityResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Community not found' });
+    }
+
+    if (communityResult.rows[0].status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending communities can be rejected' });
+    }
+
+    // Notify admin before deletion
+    const adminResult = await pool.query(
+      `SELECT user_id FROM community_admins WHERE community_id = $1`,
+      [id]
+    );
+
+    if (adminResult.rows.length > 0) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, community_id, type, title, message)
+         VALUES ($1, $2, 'approval', 'Community Rejected', $3)`,
+        [adminResult.rows[0].user_id, id, reason || 'Your community application has been rejected.']
+      );
+
+      // Reset admin user role back to 'user'
+      await pool.query(
+        `UPDATE users SET role = 'user', community_type = NULL, updated_at = NOW()
+         WHERE id = $1 AND role = 'community_admin'`,
+        [adminResult.rows[0].user_id]
+      );
+    }
+
+    // Delete community (cascades to community_admins, memberships)
+    await pool.query(`DELETE FROM communities WHERE id = $1`, [id]);
+
+    res.json({ success: true, message: `${communityResult.rows[0].name} has been rejected` });
+  } catch (err) {
+    console.error('Reject community error:', err);
+    res.status(500).json({ error: 'Failed to reject community' });
+  }
+});
+
 // Get payment history (for reporting)
 router.get('/payments', authenticateToken, platformAdminOnly, async (req, res) => {
-  const { communityId, status } = req.query;
+  const { communityId, status, startDate, endDate } = req.query;
   const pool = req.app.locals.pool;
 
   try {
@@ -331,25 +518,35 @@ router.get('/payments', authenticateToken, platformAdminOnly, async (req, res) =
       JOIN communities c ON c.id = p.community_id
       JOIN users u ON u.id = p.user_id
     `;
-    
+
     const conditions = [];
     const params = [];
-    
+
     if (communityId) {
       params.push(communityId);
       conditions.push(`p.community_id = $${params.length}`);
     }
-    
+
     if (status) {
       params.push(status);
       conditions.push(`p.status = $${params.length}`);
     }
-    
+
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`p.created_at >= $${params.length}::date`);
+    }
+
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`p.created_at < ($${params.length}::date + interval '1 day')`);
+    }
+
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(' AND ')}`;
     }
-    
-    query += ` ORDER BY p.created_at DESC LIMIT 100`;
+
+    query += ` ORDER BY p.created_at DESC LIMIT 500`;
 
     const result = await pool.query(query, params);
 

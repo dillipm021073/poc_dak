@@ -1357,7 +1357,28 @@ function MembersTab({ community }) {
     setLoading(false)
   }
 
-  const activeCount = members.filter(m => m.hasActiveAccess).length
+  const handleApproveMember = async (userId) => {
+    try {
+      await api.communities.approveMember(community.id, userId)
+      loadMembers()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const handleRejectMember = async (userId) => {
+    if (!confirm('Are you sure you want to reject this member request?')) return
+    try {
+      await api.communities.rejectMember(community.id, userId)
+      loadMembers()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const pendingMembers = members.filter(m => m.membershipStatus === 'pending')
+  const approvedMembers = members.filter(m => m.membershipStatus === 'approved' || (!m.membershipStatus && m.membershipStatus !== 'rejected'))
+  const activeCount = approvedMembers.filter(m => m.hasActiveAccess).length
 
   if (loading) return <div className="loading">Loading members...</div>
 
@@ -1365,65 +1386,123 @@ function MembersTab({ community }) {
     <div className="members-tab">
       <div className="page-header">
         <h1>Members</h1>
-        <p>View your community members</p>
+        <p>Manage your community members</p>
       </div>
 
       <div className="stats-summary">
         <div className="stat-item">
-          <span className="stat-value">{members.length}</span>
-          <span className="stat-label">Total Members</span>
+          <span className="stat-value" style={pendingMembers.length > 0 ? { color: '#f59e0b' } : {}}>{pendingMembers.length}</span>
+          <span className="stat-label">Pending Approval</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-value">{approvedMembers.length}</span>
+          <span className="stat-label">Approved Members</span>
         </div>
         <div className="stat-item">
           <span className="stat-value">{activeCount}</span>
           <span className="stat-label">Active Subscribers</span>
         </div>
         <div className="stat-item">
-          <span className="stat-value">{members.length - activeCount}</span>
+          <span className="stat-value">{approvedMembers.length - activeCount}</span>
           <span className="stat-label">View-Only</span>
         </div>
       </div>
 
-      {members.length === 0 ? (
-        <div className="empty-state">No members yet</div>
-      ) : (
-        <div className="table-container">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Member</th>
-                <th>Joined</th>
-                <th>Joined Via</th>
-                <th>Access Status</th>
-                <th>Access Expires</th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map(member => (
-                <tr key={member.id}>
-                  <td>
-                    <div className="member-cell">
-                      <strong>{member.name || 'Unnamed'}</strong>
-                      <span className="text-secondary">{member.email}</span>
-                    </div>
-                  </td>
-                  <td>{new Date(member.joinedAt).toLocaleDateString()}</td>
-                  <td className="capitalize">{member.joinedVia}</td>
-                  <td>
-                    <span className={`status-badge ${member.hasActiveAccess ? 'active' : 'pending'}`}>
-                      {member.hasActiveAccess ? 'Active' : 'View-Only'}
-                    </span>
-                  </td>
-                  <td>
-                    {member.accessExpiresAt
-                      ? new Date(member.accessExpiresAt).toLocaleDateString()
-                      : '—'}
-                  </td>
+      {/* Pending Approval Section */}
+      {pendingMembers.length > 0 && (
+        <div className="section" style={{ marginBottom: '2rem' }}>
+          <h3 style={{ marginBottom: '1rem', color: '#f59e0b' }}>Pending Approval ({pendingMembers.length})</h3>
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Requested</th>
+                  <th>Joined Via</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pendingMembers.map(member => (
+                  <tr key={member.id}>
+                    <td>
+                      <div className="member-cell">
+                        <strong>{member.name || 'Unnamed'}</strong>
+                        <span className="text-secondary">{member.email}</span>
+                      </div>
+                    </td>
+                    <td>{new Date(member.joinedAt).toLocaleDateString()}</td>
+                    <td className="capitalize">{member.joinedVia}</td>
+                    <td>
+                      <div className="action-buttons">
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => handleApproveMember(member.id)}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline"
+                          style={{ color: '#dc2626', borderColor: '#dc2626' }}
+                          onClick={() => handleRejectMember(member.id)}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
+
+      {/* Approved Members Section */}
+      <div className="section">
+        <h3 style={{ marginBottom: '1rem' }}>Approved Members ({approvedMembers.length})</h3>
+        {approvedMembers.length === 0 ? (
+          <div className="empty-state">No approved members yet</div>
+        ) : (
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Joined</th>
+                  <th>Joined Via</th>
+                  <th>Access Status</th>
+                  <th>Access Expires</th>
+                </tr>
+              </thead>
+              <tbody>
+                {approvedMembers.map(member => (
+                  <tr key={member.id}>
+                    <td>
+                      <div className="member-cell">
+                        <strong>{member.name || 'Unnamed'}</strong>
+                        <span className="text-secondary">{member.email}</span>
+                      </div>
+                    </td>
+                    <td>{new Date(member.joinedAt).toLocaleDateString()}</td>
+                    <td className="capitalize">{member.joinedVia}</td>
+                    <td>
+                      <span className={`status-badge ${member.hasActiveAccess ? 'active' : 'pending'}`}>
+                        {member.hasActiveAccess ? 'Active' : 'View-Only'}
+                      </span>
+                    </td>
+                    <td>
+                      {member.accessExpiresAt
+                        ? new Date(member.accessExpiresAt).toLocaleDateString()
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

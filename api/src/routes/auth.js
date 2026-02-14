@@ -1,7 +1,7 @@
 // D.A.K MVP v3 - Authentication Routes
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
@@ -31,22 +31,34 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'This community is not accepting new members' });
     }
 
-    // Check if user exists
+    // Check if user exists - enforce email role exclusivity
     const existingUser = await pool.query(
-      'SELECT id, community_type FROM users WHERE email = $1',
+      'SELECT id, community_type, role FROM users WHERE email = $1',
       [email]
     );
 
     if (existingUser.rows.length > 0) {
-      const existingCommunityType = existingUser.rows[0].community_type;
-      
-      // Chinese-wall: Users cannot cross community types
-      if (existingCommunityType && existingCommunityType !== community.community_type) {
-        return res.status(400).json({ 
-          error: `You are already registered in the ${existingCommunityType} network. Users cannot join communities across different religious networks.` 
+      const existing = existingUser.rows[0];
+
+      // Role exclusivity: same email cannot be used for different roles
+      if (existing.role === 'platform_admin') {
+        return res.status(400).json({
+          error: 'This email is registered as a platform administrator. The same email cannot be used for multiple roles.'
         });
       }
-      
+      if (existing.role === 'community_admin') {
+        return res.status(400).json({
+          error: 'This email is registered as a community administrator (trustee). The same email cannot be used for multiple roles.'
+        });
+      }
+
+      // Chinese-wall: Users cannot cross community types
+      if (existing.community_type && existing.community_type !== community.community_type) {
+        return res.status(400).json({
+          error: `You are already registered in the ${existing.community_type} network. Users cannot join communities across different religious networks.`
+        });
+      }
+
       return res.status(400).json({ error: 'Email already registered. Please login.' });
     }
 
@@ -61,19 +73,32 @@ router.post('/register', async (req, res) => {
 
     const user = userResult.rows[0];
 
-    // Create community membership (user starts in view-only state)
+    // Create community membership (pending approval by institute admin)
     await pool.query(
-      `INSERT INTO community_memberships (community_id, user_id, joined_via)
-       VALUES ($1, $2, 'link')`,
+      `INSERT INTO community_memberships (community_id, user_id, joined_via, status)
+       VALUES ($1, $2, 'link', 'pending')`,
       [community.id, user.id]
     );
 
-    // Create notification
+    // Create notification for the new user
     await pool.query(
       `INSERT INTO notifications (user_id, community_id, type, title, message)
-       VALUES ($1, $2, 'welcome', 'Welcome!', $3)`,
-      [user.id, community.id, `You're joining communities within the ${community.community_type} network on D.A.K`]
+       VALUES ($1, $2, 'welcome', 'Membership Pending', $3)`,
+      [user.id, community.id, `Your request to join ${community.name} is pending approval by the community administrator.`]
     );
+
+    // Notify community admin about new pending member
+    const adminResult = await pool.query(
+      `SELECT user_id FROM community_admins WHERE community_id = $1`,
+      [community.id]
+    );
+    if (adminResult.rows.length > 0) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, community_id, type, title, message)
+         VALUES ($1, $2, 'welcome', 'New Member Request', $3)`,
+        [adminResult.rows[0].user_id, community.id, `${user.name || 'A new user'} has requested to join your community and is awaiting your approval.`]
+      );
+    }
 
     // Generate token
     const token = jwt.sign(
@@ -118,13 +143,24 @@ router.post('/register-admin', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    // Check if user exists
+    // Check if user exists - enforce email role exclusivity
     const existingUser = await pool.query(
-      'SELECT id FROM users WHERE email = $1',
+      'SELECT id, role FROM users WHERE email = $1',
       [email]
     );
 
     if (existingUser.rows.length > 0) {
+      const existing = existingUser.rows[0];
+      if (existing.role === 'platform_admin') {
+        return res.status(400).json({
+          error: 'This email is registered as a platform administrator. The same email cannot be used for multiple roles.'
+        });
+      }
+      if (existing.role === 'user') {
+        return res.status(400).json({
+          error: 'This email is registered as a devotee. The same email cannot be used for multiple roles.'
+        });
+      }
       return res.status(400).json({ error: 'Email already registered. Please login.' });
     }
 

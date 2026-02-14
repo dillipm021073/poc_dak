@@ -26,6 +26,18 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Check if email is already registered as a user (role exclusivity)
+    const existingUser = await pool.query(
+      `SELECT id, role FROM users WHERE email = $1`,
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({
+        error: 'This email is already registered on the platform. Please login instead.'
+      });
+    }
+
     // Check if already on waiting list for this community type
     const existing = await pool.query(
       `SELECT id FROM waiting_list WHERE email = $1 AND community_type = $2`,
@@ -33,7 +45,7 @@ router.post('/', async (req, res) => {
     );
 
     if (existing.rows.length > 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'You are already on the waiting list for this community type'
       });
     }

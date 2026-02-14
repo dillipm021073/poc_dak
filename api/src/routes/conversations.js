@@ -9,8 +9,39 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
   const { status, type } = req.query;
 
   try {
+    // Check membership or admin for this community
+    const memberCheck = await pool.query(
+      `SELECT 1 FROM community_memberships WHERE community_id = $1 AND user_id = $2 AND status = 'approved'
+       UNION
+       SELECT 1 FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [communityId, req.user.id]
+    );
+
+    if (memberCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'You must be a member to view conversations' });
+    }
+
+    // Check Active Access
+    const accessResult = await pool.query(
+      `SELECT access_expires_at FROM active_community_access
+       WHERE community_id = $1 AND user_id = $2`,
+      [communityId, req.user.id]
+    );
+    const isAdmin = (await pool.query(
+      'SELECT 1 FROM community_admins WHERE community_id = $1 AND user_id = $2',
+      [communityId, req.user.id]
+    )).rows.length > 0;
+
+    if (!isAdmin && req.user.role !== 'platform_admin') {
+      const hasActiveAccess = accessResult.rows.length > 0 &&
+        new Date(accessResult.rows[0].access_expires_at) > new Date();
+      if (!hasActiveAccess) {
+        return res.json({ conversations: [], isViewOnly: true });
+      }
+    }
+
     let query = `
-      SELECT c.*, 
+      SELECT c.*,
              u.name as author_name,
              u.email as author_email,
              (SELECT COUNT(*) FROM comments WHERE conversation_id = c.id AND is_hidden = false) as comment_count,
@@ -64,6 +95,18 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 
     const conversation = convResult.rows[0];
+
+    // Check membership or admin for this community
+    const memberCheck = await pool.query(
+      `SELECT 1 FROM community_memberships WHERE community_id = $1 AND user_id = $2 AND status = 'approved'
+       UNION
+       SELECT 1 FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [conversation.community_id, req.user.id]
+    );
+
+    if (memberCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'You must be a member to view this conversation' });
+    }
 
     // Increment view count
     await pool.query('UPDATE conversations SET view_count = view_count + 1 WHERE id = $1', [id]);
@@ -251,19 +294,15 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'This conversation is closed' });
     }
 
-    // Check user is subscribed to community
-    const subCheck = await pool.query(
-      'SELECT * FROM community_subscriptions WHERE community_id = $1 AND user_id = $2',
+    // Check membership or admin for this community
+    const memberCheck = await pool.query(
+      `SELECT 1 FROM community_memberships WHERE community_id = $1 AND user_id = $2 AND status = 'approved'
+       UNION
+       SELECT 1 FROM community_admins WHERE community_id = $1 AND user_id = $2`,
       [conv.rows[0].community_id, req.user.id]
     );
 
-    // Allow admins to comment even without subscription
-    const adminCheck = await pool.query(
-      'SELECT * FROM community_admins WHERE community_id = $1 AND user_id = $2',
-      [conv.rows[0].community_id, req.user.id]
-    );
-
-    if (subCheck.rows.length === 0 && adminCheck.rows.length === 0) {
+    if (memberCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
       return res.status(403).json({ error: 'You must be a member to comment' });
     }
 
@@ -374,6 +413,21 @@ router.post('/:id/reactions', authenticateToken, async (req, res) => {
   }
 
   try {
+    // Verify membership to the conversation's community
+    const conv = await pool.query('SELECT community_id FROM conversations WHERE id = $1', [id]);
+    if (conv.rows.length === 0) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    const memberCheck = await pool.query(
+      `SELECT 1 FROM community_memberships WHERE community_id = $1 AND user_id = $2 AND status = 'approved'
+       UNION
+       SELECT 1 FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [conv.rows[0].community_id, req.user.id]
+    );
+    if (memberCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'You must be a member to react' });
+    }
+
     // Check if already reacted with this emoji
     const existing = await pool.query(
       'SELECT * FROM reactions WHERE conversation_id = $1 AND user_id = $2 AND emoji = $3',
@@ -413,6 +467,26 @@ router.post('/comments/:commentId/reactions', authenticateToken, async (req, res
   }
 
   try {
+    // Verify membership to the comment's community
+    const commentInfo = await pool.query(
+      `SELECT conv.community_id FROM comments c
+       JOIN conversations conv ON c.conversation_id = conv.id
+       WHERE c.id = $1`,
+      [commentId]
+    );
+    if (commentInfo.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+    const memberCheck = await pool.query(
+      `SELECT 1 FROM community_memberships WHERE community_id = $1 AND user_id = $2 AND status = 'approved'
+       UNION
+       SELECT 1 FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [commentInfo.rows[0].community_id, req.user.id]
+    );
+    if (memberCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'You must be a member to react' });
+    }
+
     const existing = await pool.query(
       'SELECT * FROM reactions WHERE comment_id = $1 AND user_id = $2 AND emoji = $3',
       [commentId, req.user.id, emoji]

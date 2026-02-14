@@ -49,6 +49,7 @@ CREATE TABLE waiting_list (
     email VARCHAR(255) NOT NULL,
     recommended_institution VARCHAR(255),
     community_type community_type NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(email, community_type)
 );
@@ -99,6 +100,7 @@ CREATE TABLE community_memberships (
     community_id UUID REFERENCES communities(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     joined_via VARCHAR(50) DEFAULT 'qr', -- 'qr' or 'link'
+    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(community_id, user_id)
 );
@@ -318,6 +320,7 @@ CREATE TABLE platform_analytics (
 
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_community_type ON users(community_type);
+CREATE UNIQUE INDEX idx_communities_name_lower ON communities(LOWER(name));
 CREATE INDEX idx_communities_status ON communities(status);
 CREATE INDEX idx_communities_type ON communities(community_type);
 CREATE INDEX idx_communities_invite ON communities(invite_link);
@@ -409,27 +412,27 @@ INSERT INTO community_admins (community_id, user_id, admin_name, admin_email, ro
 ('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000006', 'Imam Ahmad Hassan', 'imam@islamic.com', 'Imam'),
 ('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000007', 'Pandit Sharma', 'pandit@temple.com', 'Head Priest');
 
--- Community admin memberships
-INSERT INTO community_memberships (community_id, user_id, joined_via) VALUES
-('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'admin'),
-('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000005', 'admin'),
-('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000006', 'admin'),
-('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000007', 'admin');
+-- Community admin memberships (auto-approved)
+INSERT INTO community_memberships (community_id, user_id, joined_via, status) VALUES
+('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'admin', 'approved'),
+('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000005', 'admin', 'approved'),
+('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000006', 'admin', 'approved'),
+('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000007', 'admin', 'approved');
 
--- Community memberships (all devotees joined their community)
-INSERT INTO community_memberships (community_id, user_id, joined_via) VALUES
+-- Community memberships (all devotees joined and approved for demo)
+INSERT INTO community_memberships (community_id, user_id, joined_via, status) VALUES
 -- Judaism
-('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'link'),
-('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'qr'),
+('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'link', 'approved'),
+('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'qr', 'approved'),
 -- Christianity
-('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000010', 'link'),
-('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000011', 'qr'),
+('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000010', 'link', 'approved'),
+('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000011', 'qr', 'approved'),
 -- Islam
-('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000012', 'link'),
-('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000013', 'qr'),
+('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000012', 'link', 'approved'),
+('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000013', 'qr', 'approved'),
 -- Hinduism
-('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000014', 'link'),
-('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000015', 'qr');
+('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000014', 'link', 'approved'),
+('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000015', 'qr', 'approved');
 
 -- Active Community Access for all demo users
 INSERT INTO active_community_access (user_id, community_id, access_expires_at, credit_days) VALUES

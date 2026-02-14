@@ -47,19 +47,33 @@ export const auth = {
   resetPassword: (data) => api('/auth/reset-password', { method: 'POST', body: JSON.stringify(data) })
 };
 
+// Helper to build query string from params object
+function buildQuery(params = {}) {
+  const entries = Object.entries(params).filter(([, v]) => v !== '' && v !== null && v !== undefined);
+  if (entries.length === 0) return '';
+  return '?' + entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+}
+
 // Admin endpoints
 export const admin = {
   getStats: () => api('/admin/stats'),
-  getCommunities: (status) => api(`/admin/communities${status ? `?status=${status}` : ''}`),
+  getCommunities: (params = {}) => api(`/admin/communities${buildQuery(typeof params === 'string' ? { status: params } : params)}`),
   approveCommunity: (id) => api(`/admin/communities/${id}/approve`, { method: 'POST' }),
-  suspendCommunity: (id, reason) => api(`/admin/communities/${id}/suspend`, { 
-    method: 'POST', 
-    body: JSON.stringify({ reason }) 
+  suspendCommunity: (id, reason) => api(`/admin/communities/${id}/suspend`, {
+    method: 'POST',
+    body: JSON.stringify({ reason })
   }),
   reactivateCommunity: (id) => api(`/admin/communities/${id}/reactivate`, { method: 'POST' }),
-  getUsers: () => api('/admin/users'),
-  getWaitingList: (communityType) => api(`/admin/waiting-list${communityType ? `?communityType=${communityType}` : ''}`),
-  getPayments: (communityId) => api(`/admin/payments${communityId ? `?communityId=${communityId}` : ''}`),
+  getUsers: (params = {}) => api(`/admin/users${buildQuery(params)}`),
+  getWaitingList: (params = {}) => api(`/admin/waiting-list${buildQuery(typeof params === 'string' ? { communityType: params } : params)}`),
+  approveWaitingListEntry: (id) => api(`/admin/waiting-list/${id}/approve`, { method: 'POST' }),
+  rejectWaitingListEntry: (id) => api(`/admin/waiting-list/${id}/reject`, { method: 'POST' }),
+  removeWaitingListEntry: (id) => api(`/admin/waiting-list/${id}`, { method: 'DELETE' }),
+  rejectCommunity: (id, reason) => api(`/admin/communities/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason })
+  }),
+  getPayments: (params = {}) => api(`/admin/payments${buildQuery(typeof params === 'string' ? { communityId: params } : params)}`),
   getFeeStructure: () => api('/admin/fee-structure')
 };
 

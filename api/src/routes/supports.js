@@ -157,14 +157,16 @@ router.post('/', authenticateToken, async (req, res) => {
   const { communityId, amount, supportType, currency = 'USD', note } = req.body;
   
   try {
-    // Verify user is subscribed to community
-    const subResult = await pool.query(
-      'SELECT * FROM community_subscriptions WHERE community_id = $1 AND user_id = $2',
+    // Verify user is a member of this community
+    const memberCheck = await pool.query(
+      `SELECT 1 FROM community_memberships WHERE community_id = $1 AND user_id = $2 AND status = 'approved'
+       UNION
+       SELECT 1 FROM community_admins WHERE community_id = $1 AND user_id = $2`,
       [communityId, req.user.id]
     );
 
-    if (subResult.rows.length === 0) {
-      return res.status(403).json({ error: 'Not subscribed to this community' });
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You must be a member of this community' });
     }
 
     // Calculate platform fee (5%)

@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
+const { sendEventCancellation } = require('../utils/email');
 
 // Get community events (requires Active Access or admin role to view)
 router.get('/community/:communityId', authenticateToken, async (req, res) => {
@@ -85,8 +86,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
   try {
     const eventResult = await pool.query(
-      `SELECT e.*, c.name as community_name 
-       FROM events e 
+      `SELECT e.*, c.name as community_name
+       FROM events e
        JOIN communities c ON c.id = e.community_id
        WHERE e.id = $1`,
       [id]
@@ -98,18 +99,30 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
     const event = eventResult.rows[0];
 
+    // Check membership or admin for this specific community
+    const memberCheck = await pool.query(
+      `SELECT 1 FROM community_memberships WHERE community_id = $1 AND user_id = $2 AND status = 'approved'
+       UNION
+       SELECT 1 FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [event.community_id, req.user.userId]
+    );
+
+    if (memberCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'You must be a member to view this event' });
+    }
+
     // Check Active Access
     const accessResult = await pool.query(
-      `SELECT access_expires_at FROM active_community_access 
+      `SELECT access_expires_at FROM active_community_access
        WHERE community_id = $1 AND user_id = $2`,
       [event.community_id, req.user.userId]
     );
 
-    const hasActiveAccess = accessResult.rows.length > 0 && 
+    const hasActiveAccess = accessResult.rows.length > 0 &&
       new Date(accessResult.rows[0].access_expires_at) > new Date();
 
     if (!hasActiveAccess) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         error: 'Active Access required to view event details',
         isViewOnly: true
       });
@@ -259,15 +272,18 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete event (admin only)
+// Delete event (admin only) - sends cancellation email + ICS to all users with Active Access
 router.delete('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const pool = req.app.locals.pool;
 
   try {
-    // Get event and verify admin
+    // Get full event details + community name before deleting
     const eventResult = await pool.query(
-      `SELECT e.community_id FROM events e WHERE e.id = $1`,
+      `SELECT e.*, c.name as community_name
+       FROM events e
+       JOIN communities c ON c.id = e.community_id
+       WHERE e.id = $1`,
       [id]
     );
 
@@ -275,18 +291,48 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
 
+    const event = eventResult.rows[0];
+
     const adminCheck = await pool.query(
       `SELECT id FROM community_admins WHERE community_id = $1 AND user_id = $2`,
-      [eventResult.rows[0].community_id, req.user.userId]
+      [event.community_id, req.user.userId]
     );
 
     if (adminCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
+    // Get all users with Active Access to notify them
+    const usersResult = await pool.query(
+      `SELECT u.id, u.email, u.name
+       FROM active_community_access aca
+       JOIN users u ON u.id = aca.user_id
+       WHERE aca.community_id = $1 AND aca.access_expires_at > NOW()`,
+      [event.community_id]
+    );
+
+    // Create in-app cancellation notifications for all active users
+    if (usersResult.rows.length > 0) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, community_id, type, title, message, reference_type, reference_id)
+         SELECT aca.user_id, $1, 'event_cancelled', 'Event Cancelled',
+                $2, 'event', $3
+         FROM active_community_access aca
+         WHERE aca.community_id = $1 AND aca.access_expires_at > NOW()`,
+        [event.community_id, `"${event.title}" scheduled by ${event.community_name} has been cancelled`, event.id]
+      );
+    }
+
+    // Delete the event
     await pool.query(`DELETE FROM events WHERE id = $1`, [id]);
 
-    res.json({ success: true, message: 'Event deleted' });
+    // Send cancellation emails with ICS attachment (async, don't block response)
+    for (const user of usersResult.rows) {
+      sendEventCancellation({ to: user.email, event })
+        .catch(err => console.error(`Failed to send cancellation email to ${user.email}:`, err));
+    }
+
+    res.json({ success: true, message: 'Event deleted and cancellation notifications sent' });
   } catch (err) {
     console.error('Delete event error:', err);
     res.status(500).json({ error: 'Failed to delete event' });
@@ -313,14 +359,26 @@ router.get('/:id/ics', authenticateToken, async (req, res) => {
 
     const event = eventResult.rows[0];
 
+    // Check membership or admin for this specific community
+    const memberCheck = await pool.query(
+      `SELECT 1 FROM community_memberships WHERE community_id = $1 AND user_id = $2 AND status = 'approved'
+       UNION
+       SELECT 1 FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [event.community_id, req.user.userId]
+    );
+
+    if (memberCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'You must be a member to export this event' });
+    }
+
     // Check Active Access
     const accessResult = await pool.query(
-      `SELECT access_expires_at FROM active_community_access 
+      `SELECT access_expires_at FROM active_community_access
        WHERE community_id = $1 AND user_id = $2`,
       [event.community_id, req.user.userId]
     );
 
-    const hasActiveAccess = accessResult.rows.length > 0 && 
+    const hasActiveAccess = accessResult.rows.length > 0 &&
       new Date(accessResult.rows[0].access_expires_at) > new Date();
 
     if (!hasActiveAccess) {
@@ -329,19 +387,26 @@ router.get('/:id/ics', authenticateToken, async (req, res) => {
 
     // Generate ICS
     const formatDate = (date) => new Date(date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    
+    const escapeIcs = (str) => (str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+
+    const description = `${escapeIcs(event.community_name)}${event.description ? '\\n\\n' + escapeIcs(event.description) : ''}`;
+
     const ics = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//D.A.K//Community Events//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
       'BEGIN:VEVENT',
       `UID:${event.id}@dak.com`,
       `DTSTART:${formatDate(event.starts_at)}`,
       `DTEND:${formatDate(event.ends_at || event.starts_at)}`,
-      `SUMMARY:${event.title}`,
-      `DESCRIPTION:${event.description || ''}`,
-      `LOCATION:${event.location || (event.is_virtual ? 'Virtual' : '')}`,
-      `ORGANIZER:${event.community_name}`,
+      `SUMMARY:${escapeIcs(event.title)} (${escapeIcs(event.community_name)})`,
+      `DESCRIPTION:${description}`,
+      `LOCATION:${escapeIcs(event.location || (event.is_virtual ? 'Virtual' : ''))}`,
+      `ORGANIZER;CN=${escapeIcs(event.community_name)}:mailto:noreply@dak.com`,
+      `CATEGORIES:${escapeIcs(event.community_name)}`,
+      'STATUS:CONFIRMED',
       'END:VEVENT',
       'END:VCALENDAR'
     ].join('\r\n');

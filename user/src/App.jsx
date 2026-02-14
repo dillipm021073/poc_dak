@@ -63,6 +63,46 @@ const CommunitySymbol = ({ communityType, size = 24, color = 'var(--primary)' })
 }
 
 // ============================================================================
+// EVENT COLOR & MULTI-DAY HELPERS
+// ============================================================================
+
+const COMMUNITY_COLORS = [
+  { bg: '#dbeafe', border: '#2563eb', text: '#1e40af' },  // Blue
+  { bg: '#dcfce7', border: '#16a34a', text: '#166534' },  // Green
+  { bg: '#fef3c7', border: '#d97706', text: '#92400e' },  // Amber
+  { bg: '#fce7f3', border: '#db2777', text: '#9d174d' },  // Pink
+  { bg: '#e0e7ff', border: '#6366f1', text: '#4338ca' },  // Indigo
+  { bg: '#ffedd5', border: '#ea580c', text: '#9a3412' },  // Orange
+  { bg: '#f3e8ff', border: '#9333ea', text: '#6b21a8' },  // Purple
+  { bg: '#ccfbf1', border: '#0d9488', text: '#115e59' },  // Teal
+]
+
+function getCommunityColor(communityId) {
+  if (!communityId) return COMMUNITY_COLORS[0]
+  let hash = 0
+  for (let i = 0; i < communityId.length; i++) {
+    hash = ((hash << 5) - hash) + communityId.charCodeAt(i)
+    hash |= 0
+  }
+  return COMMUNITY_COLORS[Math.abs(hash) % COMMUNITY_COLORS.length]
+}
+
+function isMultiDayEvent(event) {
+  if (!event.endsAt || !event.startsAt) return false
+  const start = new Date(event.startsAt)
+  const end = new Date(event.endsAt)
+  return start.toDateString() !== end.toDateString()
+}
+
+function eventSpansDays(event) {
+  if (!event.endsAt || !event.startsAt) return 1
+  const start = new Date(event.startsAt)
+  const end = new Date(event.endsAt)
+  const diffMs = end.getTime() - start.getTime()
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24)) + 1
+}
+
+// ============================================================================
 // NOTIFICATION BELL
 // ============================================================================
 
@@ -746,6 +786,15 @@ function CommunityCard({ community, onClick }) {
 
 // Access Status Badge
 function AccessBadge({ community }) {
+  if (community.membershipStatus === 'pending') {
+    return (
+      <div className="access-badge view-only" style={{ background: '#fef3c7', color: '#92400e' }}>
+        <span className="access-icon">⏳</span>
+        <span>Pending Approval</span>
+      </div>
+    )
+  }
+
   if (community.hasActiveAccess) {
     return (
       <div className="access-badge active">
@@ -755,7 +804,7 @@ function AccessBadge({ community }) {
       </div>
     )
   }
-  
+
   return (
     <div className="access-badge view-only">
       <span className="access-icon">👁</span>
@@ -772,7 +821,7 @@ function AccessBadge({ community }) {
 // MINI CALENDAR WIDGET
 // ============================================================================
 
-function MiniCalendar({ events = [] }) {
+function MiniCalendar({ events = [], community }) {
   const [currentDate, setCurrentDate] = useState(new Date())
 
   const getWeekDates = () => {
@@ -794,10 +843,15 @@ function MiniCalendar({ events = [] }) {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December']
 
-  const hasEvent = (date) => {
-    return events.some(event => {
-      const eventDate = new Date(event.startsAt)
-      return eventDate.toDateString() === date.toDateString()
+  const getEventsForDate = (date) => {
+    const dateStart = new Date(date)
+    dateStart.setHours(0, 0, 0, 0)
+    const dateEnd = new Date(date)
+    dateEnd.setHours(23, 59, 59, 999)
+    return events.filter(event => {
+      const start = new Date(event.startsAt)
+      const end = event.endsAt ? new Date(event.endsAt) : start
+      return start <= dateEnd && end >= dateStart
     })
   }
 
@@ -828,15 +882,31 @@ function MiniCalendar({ events = [] }) {
         </div>
       </div>
       <div className="mini-calendar-grid">
-        {weekDates.map((date, i) => (
-          <div key={i} className="mini-calendar-day">
-            <span className="mini-cal-label">{dayLabels[i]}</span>
-            <span className={`mini-cal-date ${isToday(date) ? 'today' : ''}`}>
-              {date.getDate()}
-            </span>
-            {hasEvent(date) && <span className="mini-cal-dot" />}
-          </div>
-        ))}
+        {weekDates.map((date, i) => {
+          const dayEvents = getEventsForDate(date)
+          return (
+            <div key={i} className="mini-calendar-day">
+              <span className="mini-cal-label">{dayLabels[i]}</span>
+              <span className={`mini-cal-date ${isToday(date) ? 'today' : ''}`}>
+                {date.getDate()}
+              </span>
+              <div className="mini-cal-indicators">
+                {dayEvents.slice(0, 3).map((evt, j) => {
+                  const color = getCommunityColor(evt.communityId || (community && community.id))
+                  const multiDay = isMultiDayEvent(evt)
+                  return (
+                    <span
+                      key={j}
+                      className={`mini-cal-dot ${multiDay ? 'mini-cal-bar' : ''}`}
+                      style={{ background: color.border }}
+                      title={`${evt.title}${community ? ' - ' + community.name : ''}`}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -846,7 +916,7 @@ function MiniCalendar({ events = [] }) {
 // UPCOMING EVENTS SIDEBAR
 // ============================================================================
 
-function UpcomingEventsSidebar({ events = [] }) {
+function UpcomingEventsSidebar({ events = [], community }) {
   const upcoming = events
     .filter(e => new Date(e.startsAt) >= new Date())
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt))
@@ -876,20 +946,34 @@ function UpcomingEventsSidebar({ events = [] }) {
         {upcoming.length === 0 ? (
           <p className="text-secondary" style={{ padding: '16px', fontSize: '14px' }}>No upcoming events</p>
         ) : (
-          upcoming.map(event => (
-            <div key={event.id} className="upcoming-event-item">
-              <div className="upcoming-event-date-icon">
-                <span className="ue-day">{formatDay(event.startsAt)}</span>
+          upcoming.map(event => {
+            const color = getCommunityColor(event.communityId || (community && community.id))
+            const multiDay = isMultiDayEvent(event)
+            return (
+              <div key={event.id} className="upcoming-event-item" style={{ borderLeft: `3px solid ${color.border}` }}>
+                <div className="upcoming-event-date-icon" style={{ background: color.bg }}>
+                  <span className="ue-day" style={{ color: color.text }}>{formatDay(event.startsAt)}</span>
+                </div>
+                <div className="upcoming-event-info">
+                  <strong>{event.title}</strong>
+                  <span>
+                    {new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}
+                    {multiDay && ' (multi-day)'}
+                  </span>
+                </div>
+                <div className="upcoming-event-right">
+                  {formatDateRight(event.startsAt)}
+                  {multiDay && <span className="multi-day-indicator"> - {formatDateRight(event.endsAt)}</span>}
+                </div>
+                <div className="event-tooltip">
+                  <strong>{event.title}</strong>
+                  {community && <span>{community.name}</span>}
+                  {multiDay && <span>{formatDateRight(event.startsAt)} - {formatDateRight(event.endsAt)}</span>}
+                  {event.description && <p>{event.description}</p>}
+                </div>
               </div>
-              <div className="upcoming-event-info">
-                <strong>{event.title}</strong>
-                <span>{new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
-              </div>
-              <div className="upcoming-event-right">
-                {formatDateRight(event.startsAt)}
-              </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
       <Link to="/calendar" className="sidebar-card-link">View full calendar</Link>
@@ -1215,6 +1299,13 @@ function CommunityPage() {
         </div>
       </div>
 
+      {/* Pending Approval Banner */}
+      {community.membershipStatus === 'pending' && (
+        <div className="alert alert-warning" style={{ margin: '1rem 0', padding: '0.75rem 1rem', background: '#fef3c7', color: '#92400e', borderRadius: '8px', textAlign: 'center' }}>
+          Your membership is pending approval by the community administrator.
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="tabs">
         <button className={activeTab === 'overview' ? 'active' : ''} onClick={() => setActiveTab('overview')}>Overview</button>
@@ -1234,8 +1325,8 @@ function CommunityPage() {
 
             {/* Sidebar */}
             <div className="overview-sidebar">
-              <UpcomingEventsSidebar events={events} />
-              <MiniCalendar events={events} />
+              <UpcomingEventsSidebar events={events} community={community} />
+              <MiniCalendar events={events} community={community} />
               <RecentlyAddedSidebar streams={streams} />
             </div>
           </div>
@@ -1260,7 +1351,7 @@ function CommunityPage() {
             {!community.isViewOnly && (
               <MessagesTab communityId={id} communityName={community.name} />
             )}
-            <EventsTab events={events} isViewOnly={community.isViewOnly} />
+            <EventsTab events={events} isViewOnly={community.isViewOnly} community={community} />
           </div>
         )}
       </div>
@@ -1274,7 +1365,7 @@ function CommunityPage() {
 // EVENTS TAB
 // ============================================================================
 
-function EventsTab({ events, isViewOnly }) {
+function EventsTab({ events, isViewOnly, community }) {
   if (isViewOnly) {
     return (
       <div className="view-only-message">
@@ -1289,26 +1380,46 @@ function EventsTab({ events, isViewOnly }) {
 
   return (
     <div className="events-list">
-      {events.map(event => (
-        <div key={event.id} className="event-card">
-          <div className="event-date">
-            <span className="month">{new Date(event.startsAt).toLocaleDateString('en', { month: 'short' })}</span>
-            <span className="day">{new Date(event.startsAt).getDate()}</span>
+      {events.map(event => {
+        const color = getCommunityColor(community && community.id)
+        const multiDay = isMultiDayEvent(event)
+        return (
+          <div key={event.id} className={`event-card ${multiDay ? 'multi-day' : ''}`} style={{ borderLeft: `4px solid ${color.border}` }}>
+            <div className="event-date" style={{ background: color.bg }}>
+              <span className="month" style={{ color: color.border }}>{new Date(event.startsAt).toLocaleDateString('en', { month: 'short' })}</span>
+              <span className="day">{new Date(event.startsAt).getDate()}</span>
+              {multiDay && (
+                <span className="multi-day-badge" style={{ background: color.border }}>
+                  {eventSpansDays(event)}d
+                </span>
+              )}
+            </div>
+            <div className="event-info">
+              <h4>{event.title}</h4>
+              <p className="event-time">
+                {new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}
+                {multiDay && ` - ${new Date(event.endsAt).toLocaleDateString('en', { month: 'short', day: 'numeric' })} ${new Date(event.endsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}`}
+                {event.location && ` • ${event.location}`}
+                {event.isVirtual && ' • Virtual'}
+              </p>
+              {event.description && <p className="event-description">{event.description}</p>}
+            </div>
+            <button className="btn btn-sm btn-outline" onClick={() => api.events.exportIcs(event.id)}>
+              Add to Calendar
+            </button>
+            <div className="event-tooltip">
+              <strong>{event.title}</strong>
+              {community && <span>{community.name}</span>}
+              <span>
+                {new Date(event.startsAt).toLocaleString()}
+                {multiDay && ` - ${new Date(event.endsAt).toLocaleString()}`}
+              </span>
+              {event.location && <span>{event.location}</span>}
+              {event.description && <p>{event.description}</p>}
+            </div>
           </div>
-          <div className="event-info">
-            <h4>{event.title}</h4>
-            <p className="event-time">
-              {new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}
-              {event.location && ` • ${event.location}`}
-              {event.isVirtual && ' • Virtual'}
-            </p>
-            {event.description && <p className="event-description">{event.description}</p>}
-          </div>
-          <a href={api.events.exportIcs(event.id)} className="btn btn-sm btn-outline" download>
-            📅 Add to Calendar
-          </a>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -1493,21 +1604,44 @@ function CalendarPage() {
         </div>
       ) : (
         <div className="calendar-events">
-          {events.map(event => (
-            <div key={event.id} className="calendar-event-card">
-              <div className="event-date">
-                <span className="month">{new Date(event.startsAt).toLocaleDateString('en', { month: 'short' })}</span>
-                <span className="day">{new Date(event.startsAt).getDate()}</span>
+          {events.map(event => {
+            const color = getCommunityColor(event.communityId)
+            const multiDay = isMultiDayEvent(event)
+            return (
+              <div key={event.id} className={`calendar-event-card ${multiDay ? 'multi-day' : ''}`} style={{ borderLeft: `4px solid ${color.border}` }}>
+                <div className="event-date" style={{ background: color.bg }}>
+                  <span className="month" style={{ color: color.border }}>{new Date(event.startsAt).toLocaleDateString('en', { month: 'short' })}</span>
+                  <span className="day">{new Date(event.startsAt).getDate()}</span>
+                  {multiDay && (
+                    <span className="multi-day-badge" style={{ background: color.border }}>
+                      {eventSpansDays(event)} days
+                    </span>
+                  )}
+                </div>
+                <div className="event-details">
+                  <h4>{event.title}</h4>
+                  <p className="community-name" style={{ color: color.text }}>{event.communityName}</p>
+                  <p className="event-time">
+                    {new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}
+                    {multiDay && ` - ${new Date(event.endsAt).toLocaleDateString('en', { month: 'short', day: 'numeric' })} ${new Date(event.endsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}`}
+                  </p>
+                </div>
+                <button className="btn btn-sm btn-outline" onClick={() => api.events.exportIcs(event.id)}>
+                  Add to Calendar
+                </button>
+                <div className="event-tooltip">
+                  <strong>{event.title}</strong>
+                  <span>{event.communityName}</span>
+                  <span>
+                    {new Date(event.startsAt).toLocaleString()}
+                    {multiDay && ` - ${new Date(event.endsAt).toLocaleString()}`}
+                  </span>
+                  {event.location && <span>{event.location}</span>}
+                  {event.description && <p>{event.description}</p>}
+                </div>
               </div>
-              <div className="event-details">
-                <h4>{event.title}</h4>
-                <p className="community-name">{event.communityName}</p>
-                <p className="event-time">
-                  {new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}
-                </p>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

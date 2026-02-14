@@ -49,19 +49,20 @@ router.get('/my', authenticateToken, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT 
+      `SELECT
         c.id, c.name, c.community_type, c.logo_url, c.cover_image_url,
         c.head_of_institution, c.message_of_day, c.short_description,
         cm.created_at as joined_at,
+        cm.status as membership_status,
         aca.access_expires_at,
-        CASE 
-          WHEN aca.access_expires_at > NOW() THEN TRUE 
-          ELSE FALSE 
+        CASE
+          WHEN aca.access_expires_at > NOW() THEN TRUE
+          ELSE FALSE
         END as has_active_access
       FROM community_memberships cm
       JOIN communities c ON c.id = cm.community_id
       LEFT JOIN active_community_access aca ON aca.community_id = c.id AND aca.user_id = cm.user_id
-      WHERE cm.user_id = $1 AND c.status = 'active'
+      WHERE cm.user_id = $1 AND c.status = 'active' AND cm.status != 'rejected'
       ORDER BY cm.created_at DESC`,
       [req.user.userId]
     );
@@ -72,6 +73,7 @@ router.get('/my', authenticateToken, async (req, res) => {
       const msPerDay = 24 * 60 * 60 * 1000;
       let daysRemaining = expiresAt ? Math.ceil((expiresAt - now) / msPerDay) : 0;
       daysRemaining = Math.max(0, Math.min(90, daysRemaining));
+      const isPending = row.membership_status === 'pending';
 
       return {
         id: row.id,
@@ -83,9 +85,10 @@ router.get('/my', authenticateToken, async (req, res) => {
         messageOfDay: row.message_of_day,
         shortDescription: row.short_description,
         joinedAt: row.joined_at,
-        hasActiveAccess: row.has_active_access,
-        isViewOnly: !row.has_active_access,
-        daysRemaining
+        membershipStatus: row.membership_status,
+        hasActiveAccess: isPending ? false : row.has_active_access,
+        isViewOnly: isPending || !row.has_active_access,
+        daysRemaining: isPending ? 0 : daysRemaining
       };
     });
 
@@ -102,20 +105,22 @@ router.get('/:id', authenticateToken, async (req, res) => {
   const pool = req.app.locals.pool;
 
   try {
-    // Check membership
+    // Check membership and status
     const membershipResult = await pool.query(
-      `SELECT id FROM community_memberships 
+      `SELECT id, status FROM community_memberships
        WHERE community_id = $1 AND user_id = $2`,
       [id, req.user.userId]
     );
 
     const isMember = membershipResult.rows.length > 0;
+    const membershipStatus = membershipResult.rows[0]?.status || null;
+    const isPending = membershipStatus === 'pending';
 
     // Get community details
     const communityResult = await pool.query(
       `SELECT c.*, 
               ca.admin_name, ca.role_in_institution,
-              (SELECT COUNT(*) FROM community_memberships WHERE community_id = c.id) as member_count
+              (SELECT COUNT(*) FROM community_memberships WHERE community_id = c.id AND status = 'approved') as member_count
        FROM communities c
        LEFT JOIN community_admins ca ON ca.community_id = c.id
        WHERE c.id = $1`,
@@ -168,9 +173,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
       memberCount: community.member_count,
       inviteLink: community.invite_link,
       isMember,
-      hasActiveAccess,
-      isViewOnly: !hasActiveAccess,
-      daysRemaining
+      membershipStatus,
+      hasActiveAccess: isPending ? false : hasActiveAccess,
+      isViewOnly: isPending || !hasActiveAccess,
+      daysRemaining: isPending ? 0 : daysRemaining
     });
   } catch (err) {
     console.error('Get community error:', err);
@@ -232,19 +238,33 @@ router.post('/join', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'You are already a member of this community' });
     }
 
-    // Create membership (user starts in view-only state)
+    // Create membership (pending approval by institute admin)
     await pool.query(
-      `INSERT INTO community_memberships (community_id, user_id, joined_via)
-       VALUES ($1, $2, 'link')`,
+      `INSERT INTO community_memberships (community_id, user_id, joined_via, status)
+       VALUES ($1, $2, 'link', 'pending')`,
       [community.id, req.user.userId]
     );
 
-    // Create welcome notification
+    // Create notification for user
     await pool.query(
       `INSERT INTO notifications (user_id, community_id, type, title, message)
-       VALUES ($1, $2, 'welcome', 'Welcome!', $3)`,
-      [req.user.userId, community.id, `You're joining communities within the ${community.community_type} network on D.A.K`]
+       VALUES ($1, $2, 'welcome', 'Membership Pending', $3)`,
+      [req.user.userId, community.id, `Your request to join ${community.name} is pending approval by the community administrator.`]
     );
+
+    // Notify community admin about new pending member
+    const adminResult = await pool.query(
+      `SELECT user_id FROM community_admins WHERE community_id = $1`,
+      [community.id]
+    );
+    if (adminResult.rows.length > 0) {
+      const userName = (await pool.query('SELECT name FROM users WHERE id = $1', [req.user.userId])).rows[0]?.name || 'A new user';
+      await pool.query(
+        `INSERT INTO notifications (user_id, community_id, type, title, message)
+         VALUES ($1, $2, 'welcome', 'New Member Request', $3)`,
+        [adminResult.rows[0].user_id, community.id, `${userName} has requested to join your community and is awaiting your approval.`]
+      );
+    }
 
     res.json({
       success: true,
@@ -253,8 +273,9 @@ router.post('/join', authenticateToken, async (req, res) => {
         name: community.name,
         communityType: community.community_type
       },
-      message: `You're joining communities within the ${community.community_type} network on D.A.K`,
-      isViewOnly: true
+      message: `Your request to join ${community.name} is pending approval by the community administrator.`,
+      isViewOnly: true,
+      membershipStatus: 'pending'
     });
   } catch (err) {
     console.error('Join community error:', err);
@@ -276,6 +297,15 @@ router.post('/', authenticateToken, async (req, res) => {
     const validTypes = ['islam', 'christianity', 'hinduism', 'judaism'];
     if (!validTypes.includes(communityType)) {
       return res.status(400).json({ error: 'Invalid community type' });
+    }
+
+    // Check for duplicate community name (case-insensitive)
+    const duplicateCheck = await pool.query(
+      `SELECT id FROM communities WHERE LOWER(name) = LOWER($1)`,
+      [name]
+    );
+    if (duplicateCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'A community with this name already exists. Please choose a different name.' });
     }
 
     // Generate invite link
@@ -306,10 +336,10 @@ router.post('/', authenticateToken, async (req, res) => {
       [communityId, req.user.userId, adminName, adminEmail, roleInInstitution]
     );
 
-    // Create membership for admin
+    // Create membership for admin (auto-approved)
     await pool.query(
-      `INSERT INTO community_memberships (community_id, user_id, joined_via)
-       VALUES ($1, $2, 'admin')`,
+      `INSERT INTO community_memberships (community_id, user_id, joined_via, status)
+       VALUES ($1, $2, 'admin', 'approved')`,
       [communityId, req.user.userId]
     );
 
@@ -381,7 +411,7 @@ router.get('/:id/members', authenticateToken, async (req, res) => {
 
     const result = await pool.query(
       `SELECT u.id, u.name, u.email, u.created_at as user_created_at,
-              cm.joined_via, cm.created_at as joined_at,
+              cm.joined_via, cm.created_at as joined_at, cm.status as membership_status,
               aca.access_expires_at,
               CASE
                 WHEN aca.access_expires_at > NOW() THEN true
@@ -391,7 +421,7 @@ router.get('/:id/members', authenticateToken, async (req, res) => {
        JOIN users u ON u.id = cm.user_id
        LEFT JOIN active_community_access aca ON aca.user_id = u.id AND aca.community_id = cm.community_id
        WHERE cm.community_id = $1 AND u.role = 'user'
-       ORDER BY cm.created_at DESC`,
+       ORDER BY cm.status ASC, cm.created_at DESC`,
       [id]
     );
 
@@ -401,7 +431,8 @@ router.get('/:id/members', authenticateToken, async (req, res) => {
       email: row.email,
       joinedAt: row.joined_at,
       joinedVia: row.joined_via,
-      hasActiveAccess: row.has_active_access,
+      membershipStatus: row.membership_status || 'approved',
+      hasActiveAccess: row.membership_status === 'approved' ? row.has_active_access : false,
       accessExpiresAt: row.access_expires_at
     }));
 
@@ -437,7 +468,7 @@ router.get('/:id/analytics', authenticateToken, async (req, res) => {
 
     // Get member count
     const memberResult = await pool.query(
-      `SELECT COUNT(*) as count FROM community_memberships WHERE community_id = $1`,
+      `SELECT COUNT(*) as count FROM community_memberships WHERE community_id = $1 AND status = 'approved'`,
       [id]
     );
 
@@ -466,6 +497,94 @@ router.get('/:id/analytics', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Get analytics error:', err);
     res.status(500).json({ error: 'Failed to get analytics' });
+  }
+});
+
+// Approve member (institute admin only)
+router.post('/:id/members/:userId/approve', authenticateToken, async (req, res) => {
+  const { id, userId } = req.params;
+  const pool = req.app.locals.pool;
+
+  try {
+    // Verify admin
+    const adminCheck = await pool.query(
+      `SELECT id FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [id, req.user.userId]
+    );
+
+    if (adminCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const result = await pool.query(
+      `UPDATE community_memberships SET status = 'approved'
+       WHERE community_id = $1 AND user_id = $2 AND status = 'pending'
+       RETURNING id`,
+      [id, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Pending membership not found' });
+    }
+
+    // Get community name for notification
+    const community = await pool.query(`SELECT name FROM communities WHERE id = $1`, [id]);
+
+    // Notify the user
+    await pool.query(
+      `INSERT INTO notifications (user_id, community_id, type, title, message)
+       VALUES ($1, $2, 'approval', 'Membership Approved!', $3)`,
+      [userId, id, `Your membership to ${community.rows[0]?.name || 'the community'} has been approved. Welcome!`]
+    );
+
+    res.json({ success: true, message: 'Member approved successfully' });
+  } catch (err) {
+    console.error('Approve member error:', err);
+    res.status(500).json({ error: 'Failed to approve member' });
+  }
+});
+
+// Reject member (institute admin only)
+router.post('/:id/members/:userId/reject', authenticateToken, async (req, res) => {
+  const { id, userId } = req.params;
+  const pool = req.app.locals.pool;
+
+  try {
+    // Verify admin
+    const adminCheck = await pool.query(
+      `SELECT id FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [id, req.user.userId]
+    );
+
+    if (adminCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const result = await pool.query(
+      `UPDATE community_memberships SET status = 'rejected'
+       WHERE community_id = $1 AND user_id = $2 AND status = 'pending'
+       RETURNING id`,
+      [id, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Pending membership not found' });
+    }
+
+    // Get community name for notification
+    const community = await pool.query(`SELECT name FROM communities WHERE id = $1`, [id]);
+
+    // Notify the user
+    await pool.query(
+      `INSERT INTO notifications (user_id, community_id, type, title, message)
+       VALUES ($1, $2, 'approval', 'Membership Request Declined', $3)`,
+      [userId, id, `Your membership request to ${community.rows[0]?.name || 'the community'} was not approved.`]
+    );
+
+    res.json({ success: true, message: 'Member rejected' });
+  } catch (err) {
+    console.error('Reject member error:', err);
+    res.status(500).json({ error: 'Failed to reject member' });
   }
 });
 

@@ -73,7 +73,21 @@ export const events = {
   getForCommunity: (communityId) => api(`/events/community/${communityId}`),
   getOne: (id) => api(`/events/${id}`),
   getMyCalendar: () => api('/events/calendar/my'),
-  exportIcs: (id) => `${API_URL}/events/${id}/ics`
+  exportIcs: async (id) => {
+    const response = await fetch(`${API_URL}/events/${id}/ics`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    if (!response.ok) throw new Error('Failed to export calendar');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'event.ics';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 };
 
 // Streams
