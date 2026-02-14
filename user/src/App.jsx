@@ -865,15 +865,15 @@ function LiveStreamPlayer({ stream }) {
       <div className="livestream-player">
         <div className="livestream-video">
           <div className="livestream-overlay"><span className="live-tag">LIVE</span><span className="viewer-count"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>{stream.currentViewers || 0}</span></div>
-          <div className="livestream-poster">{stream.thumbnailUrl ? <img src={stream.thumbnailUrl} alt="" /> : <div className="livestream-poster-placeholder" />}</div>
+          {stream.recordingUrl ? (
+            <YouTubeEmbed url={stream.recordingUrl} title={stream.title} />
+          ) : (
+            <div className="livestream-poster">{stream.thumbnailUrl ? <img src={stream.thumbnailUrl} alt="" /> : <div className="livestream-poster-placeholder" />}</div>
+          )}
         </div>
-        <div className="livestream-controls">
-          <div className="controls-left">
-            <button className="control-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg></button>
-            <button className="control-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg></button>
-            <div className="volume-slider"><div className="volume-track"><div className="volume-fill" style={{ width: '60%' }} /></div></div>
-          </div>
-          <div className="controls-right"><button className="control-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg></button></div>
+        <div className="livestream-info">
+          <h4>{stream.title}</h4>
+          <p>{stream.currentViewers || 0} watching</p>
         </div>
       </div>
     </div>
@@ -995,7 +995,7 @@ function CommunityPage() {
         <button className={activeTab === 'streams' ? 'active' : ''} onClick={() => setActiveTab('streams')}>Streams</button>
         <button className={activeTab === 'discussions' ? 'active' : ''} onClick={() => setActiveTab('discussions')}>Discussions</button>
         <button className={activeTab === 'messages' ? 'active' : ''} onClick={() => setActiveTab('messages')}>Messages</button>
-        <button className={activeTab === 'guide' ? 'active' : ''} onClick={() => setActiveTab('guide')}>Spiritual Guide</button>
+        {/* <button className={activeTab === 'guide' ? 'active' : ''} onClick={() => setActiveTab('guide')}>Spiritual Guide</button> */}
       </div>
 
       <div className="tab-content-wrapper">
@@ -1016,7 +1016,7 @@ function CommunityPage() {
         {activeTab === 'streams' && <StreamsTab streams={streams} community={community} />}
         {activeTab === 'discussions' && <DiscussionsTab communityId={id} isViewOnly={community.isViewOnly} />}
         {activeTab === 'messages' && (community.isViewOnly ? <div className="view-only-message"><p>🔒 Activate Active Access to send messages</p></div> : <MessagesTab communityId={id} communityName={community.name} />)}
-        {activeTab === 'guide' && <SpiritualGuideTab communityId={id} community={community} />}
+        {/* {activeTab === 'guide' && <SpiritualGuideTab communityId={id} community={community} />} */}
       </div>
     </div>
   )
@@ -1081,6 +1081,7 @@ function EventsTab({ events, isViewOnly, community }) {
 
 function StreamsTab({ streams, community }) {
   const [expandedStream, setExpandedStream] = useState(null)
+  const [showingLive, setShowingLive] = useState(false)
   const liveStream = streams.find(s => s.isLive)
 
   return (
@@ -1090,7 +1091,14 @@ function StreamsTab({ streams, community }) {
           <span className="live-badge">🔴 LIVE</span>
           <h4>{liveStream.title}</h4>
           <p>{liveStream.currentViewers} watching</p>
-          <button className="btn btn-primary">Watch Now</button>
+          <button className="btn btn-primary" onClick={() => setShowingLive(!showingLive)}>
+            {showingLive ? 'Hide Stream' : 'Watch Now'}
+          </button>
+          {showingLive && liveStream.recordingUrl && (
+            <div className="live-stream-player">
+              <YouTubeEmbed url={liveStream.recordingUrl} title={liveStream.title} />
+            </div>
+          )}
         </div>
       )}
       <h4>Upcoming & Past Streams</h4>
@@ -1252,6 +1260,7 @@ function CommentItem({ comment, onReply }) {
 // SPIRITUAL GUIDE TAB
 // ============================================================================
 
+/*
 function SpiritualGuideTab({ communityId, community }) {
   const [sessions, setSessions] = useState([])
   const [currentSession, setCurrentSession] = useState(null)
@@ -1334,6 +1343,7 @@ function SpiritualGuideTab({ communityId, community }) {
     </div>
   )
 }
+*/
 
 // ============================================================================
 // MESSAGES TAB

@@ -1356,6 +1356,26 @@ body {
   font-size: 13px;
 }
 
+.livestream-video .youtube-embed {
+  padding-bottom: 0;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  margin-top: 0;
+  border-radius: 0;
+}
+
+.livestream-info {
+  padding: 12px 16px;
+  background: #2d2d44;
+  color: white;
+}
+
+.livestream-info h4 { font-size: 15px; font-weight: 600; }
+.livestream-info p { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 2px; }
+
 .livestream-controls {
   display: flex;
   align-items: center;
@@ -1902,6 +1922,7 @@ body {
 
 .live-stream-card h4 { font-size: 20px; margin-bottom: 8px; }
 .live-stream-card p { opacity: 0.9; margin-bottom: 16px; }
+.live-stream-player { margin-top: 16px; }
 
 .streams-list {
   display: flex;
