@@ -167,6 +167,30 @@ Time-bound state unlocking:
 - ~~Fundraising~~
 - ~~Entitlement~~
 
+## 📚 Documentation (MUST READ)
+
+**⚠️ Before writing any code, read these documents to understand system principles:**
+
+### Core Principles
+1. **[DOCUMENTATION_INDEX.md](./DOCUMENTATION_INDEX.md)** - Start here! Navigation guide for all documentation
+2. **[ARCHITECTURE_PRINCIPLES.md](./ARCHITECTURE_PRINCIPLES.md)** - Core system architecture rules (Chinese Wall, Role Separation, Data Integrity)
+3. **[DEVELOPER_CHECKLIST.md](./DEVELOPER_CHECKLIST.md)** - Pre-commit checklist and code templates
+4. **[ROLE_SEPARATION_PRINCIPLE.md](./ROLE_SEPARATION_PRINCIPLE.md)** - Admin vs Devotee separation rules
+
+### Admin Reference
+5. **[PLATFORM_ADMIN_FILTERS.md](./PLATFORM_ADMIN_FILTERS.md)** - Platform admin API filtering guide
+
+### Critical Rules (Never Violate)
+- ✅ **Chinese Wall**: Users belong to ONE faith type only (Judaism, Christianity, Islam, or Hinduism)
+- ✅ **Role Separation**: Admins manage communities, devotees participate - NEVER both for same user
+- ✅ **Community Integrity**: Every community MUST have a community_admins entry
+- ✅ **Membership Status**: Only 'pending' or 'approved' are valid (not 'active')
+- ✅ **Access History**: Never delete subscriptions - filter by expiry instead
+
+**📖 New developers**: Read `DOCUMENTATION_INDEX.md` first for guided learning path
+
+---
+
 ## Project Structure
 
 ```
@@ -184,7 +208,8 @@ DAK/
 ├── admin/                 # Platform admin portal
 ├── institute/             # Community admin portal
 ├── user/                  # End user dashboard
-└── shared/                # Shared assets
+├── shared/                # Shared assets
+└── *.md                   # 📚 PRINCIPLE DOCUMENTATION (READ FIRST!)
 ```
 
 ## Success Criteria (MVP)
