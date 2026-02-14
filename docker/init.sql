@@ -471,14 +471,14 @@ INSERT INTO payments (id, user_id, community_id, amount, status, psp_transaction
 
 -- Sample events
 INSERT INTO events (id, community_id, title, description, starts_at, ends_at, location, is_virtual, video_url) VALUES
-('e0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Service', 'Weekly Friday evening service with candle lighting', CURRENT_TIMESTAMP + INTERVAL '2 days', CURRENT_TIMESTAMP + INTERVAL '2 days' + INTERVAL '2 hours', 'Main Sanctuary', FALSE, 'https://www.youtube.com/watch?v=lEAFGPRoads'),
-('e0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study', 'Weekly Torah study with Rabbi Cohen', CURRENT_TIMESTAMP + INTERVAL '3 days', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '90 minutes', 'Library', FALSE, 'https://www.youtube.com/watch?v=XSh4Q8RbfMs'),
-('e0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 'Online Havdalah', 'Virtual Havdalah ceremony via livestream', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '4 hours', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '5 hours', NULL, TRUE, 'https://www.youtube.com/watch?v=T7WqefFznf4');
+('e0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Service', 'Weekly Friday evening service with candle lighting', CURRENT_TIMESTAMP + INTERVAL '2 days', CURRENT_TIMESTAMP + INTERVAL '2 days' + INTERVAL '2 hours', 'Main Sanctuary', FALSE, 'https://www.youtube.com/watch?v=jNQXAC9IVRw'),
+('e0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study', 'Weekly Torah study with Rabbi Cohen', CURRENT_TIMESTAMP + INTERVAL '3 days', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '90 minutes', 'Library', FALSE, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'),
+('e0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 'Online Havdalah', 'Virtual Havdalah ceremony via livestream', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '4 hours', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '5 hours', NULL, TRUE, 'https://www.youtube.com/watch?v=9bZkp7q19f0');
 
 -- Sample streams (with week tracking)
 INSERT INTO streams (id, community_id, title, description, scheduled_for, is_live, week_number, week_year, recording_url, recording_teaser_url) VALUES
-('d0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Morning Service', 'Live broadcast of our Shabbat morning service', CURRENT_TIMESTAMP + INTERVAL '3 days', FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, 'https://www.youtube.com/watch?v=lEAFGPRoads', NULL),
-('d0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study Live', 'Interactive Torah study session', NULL, FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, 'https://www.youtube.com/watch?v=XSh4Q8RbfMs', NULL);
+('d0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Morning Service', 'Live broadcast of our Shabbat morning service', CURRENT_TIMESTAMP + INTERVAL '3 days', FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, 'https://www.youtube.com/watch?v=jNQXAC9IVRw', NULL),
+('d0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study Live', 'Interactive Torah study session', NULL, TRUE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', NULL);
 
 -- Sample message thread
 INSERT INTO message_threads (id, community_id, user_id, last_message_at) VALUES
