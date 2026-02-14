@@ -796,11 +796,17 @@ function AccessBadge({ community }) {
   }
 
   if (community.hasActiveAccess) {
+    const expiresDate = community.expiresAt ? new Date(community.expiresAt) : null
+    const startDate = expiresDate ? new Date(expiresDate.getTime() - (community.daysRemaining * 24 * 60 * 60 * 1000) + (24 * 60 * 60 * 1000)) : null
+    const fmt = (d) => d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
     return (
       <div className="access-badge active">
         <span className="access-icon">✓</span>
         <span>Active Access</span>
         <span className="days-remaining">{community.daysRemaining} days</span>
+        {expiresDate && (
+          <span className="access-dates">{fmt(startDate)} - {fmt(expiresDate)}</span>
+        )}
       </div>
     )
   }
@@ -1165,8 +1171,17 @@ function SupportWidget({ community, communityId, onActivated }) {
               <strong>{successData.daysRemaining} days</strong>
             </div>
             <div className="support-success-row">
-              <span>Expires</span>
-              <strong>{new Date(successData.expiresAt).toLocaleDateString()}</strong>
+              <span>Access period</span>
+              <strong>
+                {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {' - '}
+                {new Date(successData.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </strong>
+            </div>
+            <div className="support-success-row">
+              <span className="text-secondary" style={{ fontSize: '12px' }}>
+                After {new Date(successData.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, this community will move to View Only
+              </span>
             </div>
           </div>
           <button className="btn btn-primary btn-block support-btn" onClick={handleDone}>
@@ -1755,14 +1770,20 @@ function ActivityPage() {
                     {a.hasActiveAccess ? 'Active' : 'Expired'}
                   </span>
                 </div>
-                {a.hasActiveAccess ? (
+                {a.hasActiveAccess ? (() => {
+                  const expiresDate = new Date(a.expiresAt)
+                  const startDate = new Date(expiresDate.getTime() - (a.daysRemaining * 24 * 60 * 60 * 1000) + (24 * 60 * 60 * 1000))
+                  const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  return (
+                    <div className="access-status-body">
+                      <span className="access-date-range">{fmt(startDate)} - {fmt(expiresDate)}</span>
+                      <span>{a.daysRemaining} days remaining</span>
+                      <span className="text-secondary">Access expires on {fmt(expiresDate)}. After this date, this community will move to View Only.</span>
+                    </div>
+                  )
+                })() : (
                   <div className="access-status-body">
-                    <span>{a.daysRemaining} days remaining</span>
-                    <span className="text-secondary">Expires {new Date(a.expiresAt).toLocaleDateString()}</span>
-                  </div>
-                ) : (
-                  <div className="access-status-body">
-                    <span className="text-secondary">No active access</span>
+                    <span className="text-secondary">No active access — this community is in View Only mode</span>
                   </div>
                 )}
               </div>

@@ -88,7 +88,8 @@ router.get('/my', authenticateToken, async (req, res) => {
         membershipStatus: row.membership_status,
         hasActiveAccess: isPending ? false : row.has_active_access,
         isViewOnly: isPending || !row.has_active_access,
-        daysRemaining: isPending ? 0 : daysRemaining
+        daysRemaining: isPending ? 0 : daysRemaining,
+        expiresAt: row.access_expires_at || null
       };
     });
 

@@ -757,6 +757,26 @@ body {
   opacity: 0.8;
 }
 
+.access-dates {
+  display: block;
+  width: 100%;
+  font-size: 11px;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+
+.access-badge.active {
+  flex-wrap: wrap;
+}
+
+.access-date-range {
+  font-weight: 600;
+  color: var(--primary);
+  font-size: 14px;
+  display: block;
+  margin-bottom: 4px;
+}
+
 /* Global Access Placeholder */
 .global-access-placeholder {
   margin-top: 48px;
