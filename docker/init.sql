@@ -119,8 +119,8 @@ CREATE TABLE active_community_access (
     -- Access expiry (rolling extension, never resets)
     access_expires_at TIMESTAMP NOT NULL,
     
-    -- Credit for payments beyond 90-day cap (hidden from user)
-    credit_days INTEGER DEFAULT 0,
+    -- Credit bucket for payments beyond 90-day cap (dollar amount, hidden from user)
+    credit_amount DECIMAL(10,2) DEFAULT 0,
     
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -435,7 +435,7 @@ INSERT INTO community_memberships (community_id, user_id, joined_via, status) VA
 ('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000015', 'qr', 'approved');
 
 -- Active Community Access for all demo users
-INSERT INTO active_community_access (user_id, community_id, access_expires_at, credit_days) VALUES
+INSERT INTO active_community_access (user_id, community_id, access_expires_at, credit_amount) VALUES
 -- Judaism
 ('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '30 days', 0),
 ('a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '15 days', 0),

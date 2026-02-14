@@ -1,46 +1,40 @@
 // D.A.K MVP v3 - Active Community Access Routes
-// Core business logic for payment → access duration
+// Core business logic for payment → access duration + credit bucket
 
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 
 // =============================================================================
-// PAYMENT → ACCESS DURATION CONVERSION (Internal Logic)
+// PAYMENT → ACCESS DURATION CONVERSION (Internal Logic - Section 7A)
 // =============================================================================
 
 function calculateAccessDays(amount) {
-  // MVP v3 Access Conversion Table
+  // MVP v3 Access Conversion Table (7A)
   if (amount < 2) return 7;        // Grace tier
   if (amount < 5) return 14;       // Partial access
   if (amount < 10) return 30;      // 1 month
   if (amount < 15) return 60;      // 2 months
   if (amount < 20) return 90;      // Max active access
-  return 90;                        // $20+ = 90 days + credit
+  return 90;                        // $20+ = 90 days (excess $ → credit bucket)
 }
 
-function calculateCreditDays(amount) {
-  // Any payment $20+ grants 90 days visible + credit stored
-  if (amount < 20) return 0;
-  
-  // Excess stored as credit (internal only)
-  // $5 = 30 days base, so calculate excess
-  const baseDaysPerFive = 30;
-  const totalDaysValue = Math.floor(amount / 5) * baseDaysPerFive;
-  const creditDays = Math.max(0, totalDaysValue - 90);
-  return creditDays;
+// Calculate dollar credit from payment (excess over $20 stored as credit)
+function calculateCreditAmount(paymentAmount) {
+  if (paymentAmount < 20) return 0;
+  return parseFloat((paymentAmount - 20).toFixed(2));
 }
 
 // =============================================================================
-// PLATFORM FEE SLIDING SCALE (Monthly Activity Based)
+// PLATFORM FEE SLIDING SCALE (Monthly Activity Based - Section 8A)
 // =============================================================================
 
 async function calculatePlatformFee(pool, communityId, amount) {
   // Get current month's activity
   const yearMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
-  
+
   const activityResult = await pool.query(
-    `SELECT total_collected FROM monthly_community_activity 
+    `SELECT total_collected FROM monthly_community_activity
      WHERE community_id = $1 AND year_month = $2`,
     [communityId, yearMonth]
   );
@@ -78,7 +72,7 @@ router.get('/status/:communityId', authenticateToken, async (req, res) => {
   try {
     // Check membership
     const membershipResult = await pool.query(
-      `SELECT id FROM community_memberships 
+      `SELECT id FROM community_memberships
        WHERE community_id = $1 AND user_id = $2`,
       [communityId, req.user.userId]
     );
@@ -93,7 +87,7 @@ router.get('/status/:communityId', authenticateToken, async (req, res) => {
 
     // Check active access
     const accessResult = await pool.query(
-      `SELECT access_expires_at, credit_days FROM active_community_access 
+      `SELECT access_expires_at, credit_amount FROM active_community_access
        WHERE community_id = $1 AND user_id = $2`,
       [communityId, req.user.userId]
     );
@@ -111,7 +105,7 @@ router.get('/status/:communityId', authenticateToken, async (req, res) => {
     const now = new Date();
     const expiresAt = new Date(access.access_expires_at);
     const hasActiveAccess = expiresAt > now;
-    
+
     // Calculate days remaining (max shown to user: 90)
     const msPerDay = 24 * 60 * 60 * 1000;
     let daysRemaining = Math.ceil((expiresAt - now) / msPerDay);
@@ -123,7 +117,7 @@ router.get('/status/:communityId', authenticateToken, async (req, res) => {
       isViewOnly: !hasActiveAccess,
       daysRemaining,
       expiresAt: access.access_expires_at
-      // Note: credit_days is internal only, never exposed to user
+      // Note: credit_amount is internal only, never exposed to user
     });
   } catch (err) {
     console.error('Get access status error:', err);
@@ -137,15 +131,15 @@ router.get('/my-access', authenticateToken, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT 
+      `SELECT
         c.id as community_id,
         c.name as community_name,
         c.community_type,
         cm.created_at as joined_at,
         aca.access_expires_at,
-        CASE 
-          WHEN aca.access_expires_at > NOW() THEN TRUE 
-          ELSE FALSE 
+        CASE
+          WHEN aca.access_expires_at > NOW() THEN TRUE
+          ELSE FALSE
         END as has_active_access
       FROM community_memberships cm
       JOIN communities c ON c.id = cm.community_id
@@ -257,8 +251,8 @@ router.post('/mock-complete/:paymentId', authenticateToken, async (req, res) => 
     }
 
     const payment = paymentResult.rows[0];
+    const paymentAmount = parseFloat(payment.amount);
     const daysGranted = payment.days_granted;
-    const creditDays = calculateCreditDays(payment.amount);
 
     // Update payment status
     await pool.query(
@@ -268,57 +262,64 @@ router.post('/mock-complete/:paymentId', authenticateToken, async (req, res) => 
 
     // Get or create active access record
     const existingAccess = await pool.query(
-      `SELECT id, access_expires_at, credit_days FROM active_community_access 
+      `SELECT id, access_expires_at, credit_amount FROM active_community_access
        WHERE user_id = $1 AND community_id = $2`,
       [req.user.userId, payment.community_id]
     );
 
+    const now = new Date();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const maxExpiry = new Date(now.getTime() + (90 * msPerDay));
     let newExpiresAt;
-    let totalCreditDays;
+    let totalCreditAmount;
 
     if (existingAccess.rows.length > 0) {
-      // Rolling extension - add days to current expiry (if not expired) or from now
       const current = existingAccess.rows[0];
       const currentExpiry = new Date(current.access_expires_at);
-      const now = new Date();
-      const baseDate = currentExpiry > now ? currentExpiry : now;
-      
-      newExpiresAt = new Date(baseDate.getTime() + (daysGranted * 24 * 60 * 60 * 1000));
-      totalCreditDays = (current.credit_days || 0) + creditDays;
+      const currentCredit = parseFloat(current.credit_amount) || 0;
+      const currentDaysRemaining = Math.max(0, Math.ceil((currentExpiry - now) / msPerDay));
 
-      // Apply credit if needed (90-day cap logic)
-      const maxExpiry = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
-      if (newExpiresAt > maxExpiry) {
-        const excessMs = newExpiresAt - maxExpiry;
-        const excessDays = Math.floor(excessMs / (24 * 60 * 60 * 1000));
-        totalCreditDays += excessDays;
-        newExpiresAt = maxExpiry;
+      // If user already has credit > 0 or >= 90 days remaining, entire payment goes to credit
+      if (currentCredit > 0 || currentDaysRemaining >= 90) {
+        newExpiresAt = currentExpiry > now ? currentExpiry : now;
+        // Cap display at 90 days, keep actual expiry
+        if (newExpiresAt > maxExpiry) {
+          newExpiresAt = maxExpiry;
+        }
+        totalCreditAmount = parseFloat((currentCredit + paymentAmount).toFixed(2));
+      } else {
+        // Rolling extension - add days to current expiry (if not expired) or from now
+        const baseDate = currentExpiry > now ? currentExpiry : now;
+        newExpiresAt = new Date(baseDate.getTime() + (daysGranted * msPerDay));
+        totalCreditAmount = currentCredit + calculateCreditAmount(paymentAmount);
+
+        // Apply 90-day cap: excess access converted to dollar credit
+        if (newExpiresAt > maxExpiry) {
+          newExpiresAt = maxExpiry;
+          // Any overshoot stays as dollar credit (already calculated from payment)
+        }
       }
 
       await pool.query(
-        `UPDATE active_community_access 
-         SET access_expires_at = $1, credit_days = $2, updated_at = NOW()
+        `UPDATE active_community_access
+         SET access_expires_at = $1, credit_amount = $2, updated_at = NOW()
          WHERE id = $3`,
-        [newExpiresAt, totalCreditDays, current.id]
+        [newExpiresAt, totalCreditAmount, current.id]
       );
     } else {
       // New access record
-      newExpiresAt = new Date(Date.now() + (daysGranted * 24 * 60 * 60 * 1000));
-      totalCreditDays = creditDays;
+      newExpiresAt = new Date(now.getTime() + (daysGranted * msPerDay));
+      totalCreditAmount = calculateCreditAmount(paymentAmount);
 
       // Apply 90-day cap
-      const maxExpiry = new Date(Date.now() + (90 * 24 * 60 * 60 * 1000));
       if (newExpiresAt > maxExpiry) {
-        const excessMs = newExpiresAt - maxExpiry;
-        const excessDays = Math.floor(excessMs / (24 * 60 * 60 * 1000));
-        totalCreditDays += excessDays;
         newExpiresAt = maxExpiry;
       }
 
       await pool.query(
-        `INSERT INTO active_community_access (user_id, community_id, access_expires_at, credit_days)
+        `INSERT INTO active_community_access (user_id, community_id, access_expires_at, credit_amount)
          VALUES ($1, $2, $3, $4)`,
-        [req.user.userId, payment.community_id, newExpiresAt, totalCreditDays]
+        [req.user.userId, payment.community_id, newExpiresAt, totalCreditAmount]
       );
     }
 
@@ -327,8 +328,8 @@ router.post('/mock-complete/:paymentId', authenticateToken, async (req, res) => 
     await pool.query(
       `INSERT INTO monthly_community_activity (community_id, year_month, total_collected, platform_fee_total)
        VALUES ($1, $2, $3, $4)
-       ON CONFLICT (community_id, year_month) 
-       DO UPDATE SET 
+       ON CONFLICT (community_id, year_month)
+       DO UPDATE SET
          total_collected = monthly_community_activity.total_collected + $3,
          platform_fee_total = monthly_community_activity.platform_fee_total + $4,
          updated_at = NOW()`,
@@ -343,8 +344,6 @@ router.post('/mock-complete/:paymentId', authenticateToken, async (req, res) => 
     );
 
     // Calculate display days (capped at 90)
-    const now = new Date();
-    const msPerDay = 24 * 60 * 60 * 1000;
     let displayDays = Math.ceil((newExpiresAt - now) / msPerDay);
     displayDays = Math.min(90, displayDays);
 
@@ -407,15 +406,16 @@ router.get('/payments/:communityId', authenticateToken, async (req, res) => {
   }
 });
 
-// Apply credit days (internal - called by cron or when access drops below 90 days)
+// Auto-apply credit bucket (triggered when access < 2 days remaining)
+// Deducts up to $20 from credit_amount and extends access per 7A table
 router.post('/apply-credit/:communityId', authenticateToken, async (req, res) => {
   const { communityId } = req.params;
   const pool = req.app.locals.pool;
 
   try {
     const accessResult = await pool.query(
-      `SELECT id, access_expires_at, credit_days FROM active_community_access
-       WHERE user_id = $1 AND community_id = $2 AND credit_days > 0`,
+      `SELECT id, access_expires_at, credit_amount FROM active_community_access
+       WHERE user_id = $1 AND community_id = $2 AND credit_amount > 0`,
       [req.user.userId, communityId]
     );
 
@@ -427,29 +427,60 @@ router.post('/apply-credit/:communityId', authenticateToken, async (req, res) =>
     const now = new Date();
     const currentExpiry = new Date(access.access_expires_at);
     const msPerDay = 24 * 60 * 60 * 1000;
-    const currentDaysRemaining = Math.ceil((currentExpiry - now) / msPerDay);
+    const currentDaysRemaining = Math.max(0, Math.ceil((currentExpiry - now) / msPerDay));
+    const currentCredit = parseFloat(access.credit_amount);
 
-    // Only apply credit if access < 90 days
-    if (currentDaysRemaining >= 90) {
-      return res.json({ message: 'Access is already at maximum (90 days)' });
+    // Only auto-apply credit when access < 2 days remaining
+    if (currentDaysRemaining >= 2) {
+      return res.json({ message: 'Access has more than 2 days remaining. Credit will auto-apply when access is less than 2 days.' });
     }
 
-    const daysNeeded = 90 - currentDaysRemaining;
-    const daysToApply = Math.min(daysNeeded, access.credit_days);
-    const newExpiry = new Date(currentExpiry.getTime() + (daysToApply * msPerDay));
-    const remainingCredit = access.credit_days - daysToApply;
+    // Deduct up to $20 from credit bucket
+    const amountToCharge = Math.min(currentCredit, 20);
+    const daysToGrant = calculateAccessDays(amountToCharge);
+    const remainingCredit = parseFloat((currentCredit - amountToCharge).toFixed(2));
+
+    // Extend from current expiry (or now if expired)
+    const baseDate = currentExpiry > now ? currentExpiry : now;
+    let newExpiry = new Date(baseDate.getTime() + (daysToGrant * msPerDay));
+
+    // Cap at 90 days from now
+    const maxExpiry = new Date(now.getTime() + (90 * msPerDay));
+    if (newExpiry > maxExpiry) {
+      newExpiry = maxExpiry;
+    }
 
     await pool.query(
-      `UPDATE active_community_access 
-       SET access_expires_at = $1, credit_days = $2, updated_at = NOW()
+      `UPDATE active_community_access
+       SET access_expires_at = $1, credit_amount = $2, updated_at = NOW()
        WHERE id = $3`,
       [newExpiry, remainingCredit, access.id]
     );
 
+    // Get community name for notification
+    const communityResult = await pool.query(
+      `SELECT name FROM communities WHERE id = $1`,
+      [communityId]
+    );
+    const communityName = communityResult.rows[0]?.name || 'the community';
+
+    // Create notification about auto-charge
+    await pool.query(
+      `INSERT INTO notifications (user_id, community_id, type, title, message)
+       VALUES ($1, $2, 'access', 'Access Auto-Extended', $3)`,
+      [req.user.userId, communityId,
+       `Your access to ${communityName} has been extended by ${daysToGrant} days. $${amountToCharge.toFixed(2)} was applied from your credit balance. New expiry: ${newExpiry.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`]
+    );
+
+    const newDaysRemaining = Math.min(90, Math.ceil((newExpiry - now) / msPerDay));
+
     res.json({
-      daysApplied: daysToApply,
-      newDaysRemaining: Math.min(90, currentDaysRemaining + daysToApply),
-      message: `Applied ${daysToApply} credit days to your access`
+      amountCharged: amountToCharge,
+      daysGranted: daysToGrant,
+      remainingCredit,
+      newDaysRemaining,
+      newExpiresAt: newExpiry,
+      message: `Applied $${amountToCharge.toFixed(2)} from credit. Access extended by ${daysToGrant} days.`
     });
   } catch (err) {
     console.error('Apply credit error:', err);

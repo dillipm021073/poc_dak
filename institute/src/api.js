@@ -56,6 +56,7 @@ export const communities = {
   getMembers: (id) => api(`/communities/${id}/members`),
   approveMember: (communityId, userId) => api(`/communities/${communityId}/members/${userId}/approve`, { method: 'POST' }),
   rejectMember: (communityId, userId) => api(`/communities/${communityId}/members/${userId}/reject`, { method: 'POST' }),
+  setMemberAccess: (communityId, userId, data) => api(`/communities/${communityId}/members/${userId}/set-access`, { method: 'POST', body: JSON.stringify(data) }),
   getAnalytics: (id) => api(`/communities/${id}/analytics`),
   create: (data) => api('/communities', { method: 'POST', body: JSON.stringify(data) })
 };

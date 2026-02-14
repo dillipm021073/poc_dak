@@ -414,6 +414,7 @@ router.get('/:id/members', authenticateToken, async (req, res) => {
       `SELECT u.id, u.name, u.email, u.created_at as user_created_at,
               cm.joined_via, cm.created_at as joined_at, cm.status as membership_status,
               aca.access_expires_at,
+              aca.credit_amount,
               CASE
                 WHEN aca.access_expires_at > NOW() THEN true
                 ELSE false
@@ -434,7 +435,8 @@ router.get('/:id/members', authenticateToken, async (req, res) => {
       joinedVia: row.joined_via,
       membershipStatus: row.membership_status || 'approved',
       hasActiveAccess: row.membership_status === 'approved' ? row.has_active_access : false,
-      accessExpiresAt: row.access_expires_at
+      accessExpiresAt: row.access_expires_at,
+      creditAmount: row.credit_amount ? parseFloat(row.credit_amount) : 0
     }));
 
     res.json(members);
@@ -586,6 +588,97 @@ router.post('/:id/members/:userId/reject', authenticateToken, async (req, res) =
   } catch (err) {
     console.error('Reject member error:', err);
     res.status(500).json({ error: 'Failed to reject member' });
+  }
+});
+
+// Set/extend member access (institute admin only)
+router.post('/:id/members/:userId/set-access', authenticateToken, async (req, res) => {
+  const { id, userId } = req.params;
+  const { accessUntil, daysToGrant } = req.body;
+  const pool = req.app.locals.pool;
+
+  try {
+    // Verify admin
+    const adminCheck = await pool.query(
+      `SELECT id FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [id, req.user.userId]
+    );
+
+    if (adminCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // Verify target user is an approved member
+    const memberCheck = await pool.query(
+      `SELECT id FROM community_memberships WHERE community_id = $1 AND user_id = $2 AND status = 'approved'`,
+      [id, userId]
+    );
+
+    if (memberCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Approved member not found' });
+    }
+
+    // Calculate new expiry date
+    let newExpiresAt;
+
+    if (accessUntil) {
+      newExpiresAt = new Date(accessUntil);
+      if (isNaN(newExpiresAt.getTime()) || newExpiresAt <= new Date()) {
+        return res.status(400).json({ error: 'accessUntil must be a valid future date' });
+      }
+    } else if (daysToGrant && Number.isInteger(daysToGrant) && daysToGrant > 0 && daysToGrant <= 365) {
+      // Rolling extension: add days to current expiry if not expired, otherwise from now
+      const existing = await pool.query(
+        `SELECT access_expires_at FROM active_community_access WHERE user_id = $1 AND community_id = $2`,
+        [userId, id]
+      );
+      const now = new Date();
+      let baseDate = now;
+      if (existing.rows.length > 0) {
+        const currentExpiry = new Date(existing.rows[0].access_expires_at);
+        if (currentExpiry > now) {
+          baseDate = currentExpiry;
+        }
+      }
+      newExpiresAt = new Date(baseDate.getTime() + (daysToGrant * 24 * 60 * 60 * 1000));
+    } else {
+      return res.status(400).json({ error: 'Provide accessUntil (ISO date) or daysToGrant (1-365)' });
+    }
+
+    // Upsert access record (preserve existing credit_amount)
+    const existing = await pool.query(
+      `SELECT id FROM active_community_access WHERE user_id = $1 AND community_id = $2`,
+      [userId, id]
+    );
+
+    if (existing.rows.length > 0) {
+      await pool.query(
+        `UPDATE active_community_access SET access_expires_at = $1, updated_at = NOW() WHERE user_id = $2 AND community_id = $3`,
+        [newExpiresAt, userId, id]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO active_community_access (user_id, community_id, access_expires_at, credit_amount) VALUES ($1, $2, $3, 0)`,
+        [userId, id, newExpiresAt]
+      );
+    }
+
+    // Notify user
+    const community = await pool.query(`SELECT name FROM communities WHERE id = $1`, [id]);
+    const communityName = community.rows[0]?.name || 'the community';
+    await pool.query(
+      `INSERT INTO notifications (user_id, community_id, type, title, message) VALUES ($1, $2, 'access', 'Access Updated', $3)`,
+      [userId, id, `Your access to ${communityName} has been updated. Active until ${newExpiresAt.toLocaleDateString()}.`]
+    );
+
+    res.json({
+      success: true,
+      accessExpiresAt: newExpiresAt,
+      message: `Access updated until ${newExpiresAt.toLocaleDateString()}`
+    });
+  } catch (err) {
+    console.error('Set member access error:', err);
+    res.status(500).json({ error: 'Failed to set member access' });
   }
 });
 

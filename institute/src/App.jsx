@@ -1342,6 +1342,9 @@ function MessagesTab({ community }) {
 function MembersTab({ community }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [editingAccessForUser, setEditingAccessForUser] = useState(null)
+  const [accessDate, setAccessDate] = useState('')
+  const [accessLoading, setAccessLoading] = useState(false)
 
   useEffect(() => {
     loadMembers()
@@ -1374,6 +1377,32 @@ function MembersTab({ community }) {
     } catch (err) {
       alert(err.message)
     }
+  }
+
+  const getDefaultAccessDate = (member) => {
+    if (member.accessExpiresAt) {
+      const d = new Date(member.accessExpiresAt)
+      if (d > new Date()) return d.toISOString().split('T')[0]
+    }
+    const d = new Date()
+    d.setDate(d.getDate() + 30)
+    return d.toISOString().split('T')[0]
+  }
+
+  const handleSetAccess = async (userId) => {
+    if (!accessDate) return
+    setAccessLoading(true)
+    try {
+      await api.communities.setMemberAccess(community.id, userId, {
+        accessUntil: new Date(accessDate + 'T23:59:59').toISOString()
+      })
+      setEditingAccessForUser(null)
+      setAccessDate('')
+      loadMembers()
+    } catch (err) {
+      alert(err.message)
+    }
+    setAccessLoading(false)
   }
 
   const pendingMembers = members.filter(m => m.membershipStatus === 'pending')
@@ -1472,7 +1501,9 @@ function MembersTab({ community }) {
                   <th>Joined</th>
                   <th>Joined Via</th>
                   <th>Access Status</th>
-                  <th>Access Expires</th>
+                  <th>Max Access Date</th>
+                  <th>Credit Pending</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1495,6 +1526,47 @@ function MembersTab({ community }) {
                       {member.accessExpiresAt
                         ? new Date(member.accessExpiresAt).toLocaleDateString()
                         : '—'}
+                    </td>
+                    <td>
+                      {member.creditAmount > 0
+                        ? <span style={{ color: '#16a34a', fontWeight: 600 }}>${member.creditAmount.toFixed(2)}</span>
+                        : <span className="text-secondary">—</span>}
+                    </td>
+                    <td>
+                      {editingAccessForUser === member.id ? (
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <input
+                            type="date"
+                            value={accessDate}
+                            onChange={(e) => setAccessDate(e.target.value)}
+                            min={new Date().toISOString().split('T')[0]}
+                            style={{ padding: '4px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                          />
+                          <button
+                            className="btn btn-sm btn-primary"
+                            onClick={() => handleSetAccess(member.id)}
+                            disabled={accessLoading || !accessDate}
+                          >
+                            {accessLoading ? '...' : 'Save'}
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline"
+                            onClick={() => { setEditingAccessForUser(null); setAccessDate('') }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={() => {
+                            setEditingAccessForUser(member.id)
+                            setAccessDate(getDefaultAccessDate(member))
+                          }}
+                        >
+                          Set Access
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

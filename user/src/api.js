@@ -125,6 +125,37 @@ export const waitingList = {
   getCommunityTypes: () => api('/waiting-list/community-types')
 };
 
+// Guide (AI Spiritual Guidance)
+export const guide = {
+  getSessions: () => api('/guide/sessions'),
+  getSession: (sessionId) => api(`/guide/sessions/${sessionId}`),
+  startSession: (data) => api('/guide/sessions', { method: 'POST', body: JSON.stringify(data) }),
+  sendMessage: (sessionId, content) => api(`/guide/sessions/${sessionId}/messages`, { method: 'POST', body: JSON.stringify({ content }) }),
+  getInspiration: (communityType) => api(`/guide/inspiration/${communityType}`)
+};
+
+// Conversations (Community Discussions)
+export const conversations = {
+  getForCommunity: (communityId) => api(`/conversations/community/${communityId}`),
+  getOne: (id) => api(`/conversations/${id}`),
+  addComment: (id, content, parentId) => api(`/conversations/${id}/comments`, { method: 'POST', body: JSON.stringify({ content, parentId }) }),
+  addReaction: (id, emoji) => api(`/conversations/${id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }),
+  addCommentReaction: (commentId, emoji) => api(`/conversations/comments/${commentId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) })
+};
+
+// Updates Feed
+export const updates = {
+  getAll: (params = {}) => api(`/updates${Object.keys(params).length ? '?' + new URLSearchParams(params) : ''}`),
+  markRead: (id) => api(`/updates/${id}/read`, { method: 'PUT' }),
+  markAllRead: (communityId) => api('/updates/read-all', { method: 'PUT', body: JSON.stringify(communityId ? { communityId } : {}) })
+};
+
+// Supports (Support History)
+export const supports = {
+  getMyHistory: () => api('/supports/my-history'),
+  getOne: (id) => api(`/supports/${id}`)
+};
+
 export default {
   auth,
   communities,
@@ -133,5 +164,9 @@ export default {
   streams,
   messages,
   notifications,
-  waitingList
+  waitingList,
+  guide,
+  conversations,
+  updates,
+  supports
 };

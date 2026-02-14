@@ -3,7 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 
-// Get user's donation history
+// Get user's support history
 router.get('/my-history', authenticateToken, async (req, res) => {
   const pool = req.app.locals.pool;
 
@@ -47,11 +47,11 @@ router.get('/my-history', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch donation history' });
+    res.status(500).json({ error: 'Failed to fetch support history' });
   }
 });
 
-// Get donations for a community (admin only)
+// Get support payments for a community (admin only)
 router.get('/community/:communityId', authenticateToken, async (req, res) => {
   const pool = req.app.locals.pool;
   const { communityId } = req.params;
@@ -94,11 +94,11 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch donations' });
+    res.status(500).json({ error: 'Failed to fetch support payments' });
   }
 });
 
-// Get single donation with details
+// Get single support payment with details
 router.get('/:id', authenticateToken, async (req, res) => {
   const pool = req.app.locals.pool;
   const { id } = req.params;
@@ -117,10 +117,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
     `, [id]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Donation not found' });
+      return res.status(404).json({ error: 'Support payment not found' });
     }
 
-    // Check authorization (donor or community admin)
+    // Check authorization (supporter or community admin)
     const donation = result.rows[0];
     if (donation.user_id !== req.user.id) {
       const adminCheck = await pool.query(
@@ -147,7 +147,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch donation' });
+    res.status(500).json({ error: 'Failed to fetch support payment' });
   }
 });
 
@@ -222,10 +222,10 @@ router.post('/:id/acknowledge', authenticateToken, async (req, res) => {
   const { message } = req.body;
 
   try {
-    // Get donation
+    // Get support record
     const donation = await pool.query('SELECT * FROM supports WHERE id = $1', [id]);
     if (donation.rows.length === 0) {
-      return res.status(404).json({ error: 'Donation not found' });
+      return res.status(404).json({ error: 'Support record not found' });
     }
 
     // Check if admin
@@ -245,11 +245,11 @@ router.post('/:id/acknowledge', authenticateToken, async (req, res) => {
       RETURNING *
     `, [id, message, req.user.id]);
 
-    // Create notification for donor
+    // Create notification for supporter
     await pool.query(`
       INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id)
-      VALUES ($1, 'donation_ack', 'Thank You for Your Donation!', $2, 'support', $3)
-    `, [donation.rows[0].user_id, `${req.user.name} sent you a thank you message for your donation.`, id]);
+      VALUES ($1, 'donation_ack', 'Thank You for Your Support!', $2, 'support', $3)
+    `, [donation.rows[0].user_id, `${req.user.name} sent you a thank you message for your support.`, id]);
 
     res.status(201).json({
       acknowledgment: {

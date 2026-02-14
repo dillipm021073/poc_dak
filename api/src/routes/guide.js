@@ -3,10 +3,10 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 
 // Spiritual guidance responses based on faith tradition
-const getGuruResponse = (communityType, guruPersona, userMessage, conversationHistory) => {
+const getGuideResponse = (communityType, guidePersona, userMessage, conversationHistory) => {
   // In production, this would call an AI API (OpenAI, Anthropic, etc.)
   // For POC, we provide thoughtful pre-crafted responses based on faith tradition
-  
+
   const greetings = {
     jewish: 'Shalom',
     christian: 'Peace be with you',
@@ -104,15 +104,15 @@ const getGuruResponse = (communityType, guruPersona, userMessage, conversationHi
   return response;
 };
 
-// Get user's guru sessions
+// Get user's guide sessions
 router.get('/sessions', authenticateToken, async (req, res) => {
   const pool = req.app.locals.pool;
 
   try {
     const result = await pool.query(`
       SELECT gs.*, c.name as community_name, c.community_type,
-             (SELECT content FROM guru_messages WHERE session_id = gs.id ORDER BY created_at DESC LIMIT 1) as last_message
-      FROM guru_sessions gs
+             (SELECT content FROM guide_messages WHERE session_id = gs.id ORDER BY created_at DESC LIMIT 1) as last_message
+      FROM guide_sessions gs
       JOIN communities c ON gs.community_id = c.id
       WHERE gs.user_id = $1
       ORDER BY gs.updated_at DESC
@@ -133,7 +133,7 @@ router.get('/sessions/:sessionId', authenticateToken, async (req, res) => {
   try {
     // Verify ownership
     const session = await pool.query(
-      'SELECT * FROM guru_sessions WHERE id = $1 AND user_id = $2',
+      'SELECT * FROM guide_sessions WHERE id = $1 AND user_id = $2',
       [sessionId, req.user.id]
     );
 
@@ -142,13 +142,13 @@ router.get('/sessions/:sessionId', authenticateToken, async (req, res) => {
     }
 
     const messages = await pool.query(
-      'SELECT * FROM guru_messages WHERE session_id = $1 ORDER BY created_at ASC',
+      'SELECT * FROM guide_messages WHERE session_id = $1 ORDER BY created_at ASC',
       [sessionId]
     );
 
-    res.json({ 
+    res.json({
       session: session.rows[0],
-      messages: messages.rows 
+      messages: messages.rows
     });
   } catch (err) {
     console.error(err);
@@ -176,7 +176,7 @@ router.post('/sessions', authenticateToken, async (req, res) => {
 
     // Create session
     const sessionResult = await pool.query(`
-      INSERT INTO guru_sessions (user_id, community_id, title)
+      INSERT INTO guide_sessions (user_id, community_id, title)
       VALUES ($1, $2, $3)
       RETURNING *
     `, [req.user.id, communityId, initialMessage?.substring(0, 50) || 'New conversation']);
@@ -185,27 +185,27 @@ router.post('/sessions', authenticateToken, async (req, res) => {
 
     // Add user's initial message
     await pool.query(`
-      INSERT INTO guru_messages (session_id, role, content)
+      INSERT INTO guide_messages (session_id, role, content)
       VALUES ($1, 'user', $2)
     `, [session.id, initialMessage]);
 
-    // Generate guru response
-    const guruResponse = getGuruResponse(
-      comm.community_type, 
-      comm.guru_persona, 
+    // Generate guide response
+    const guideResponse = getGuideResponse(
+      comm.community_type,
+      comm.guide_persona,
       initialMessage,
       []
     );
 
-    // Add guru's response
+    // Add guide's response
     await pool.query(`
-      INSERT INTO guru_messages (session_id, role, content)
-      VALUES ($1, 'guru', $2)
-    `, [session.id, guruResponse]);
+      INSERT INTO guide_messages (session_id, role, content)
+      VALUES ($1, 'guide', $2)
+    `, [session.id, guideResponse]);
 
     // Get all messages
     const messages = await pool.query(
-      'SELECT * FROM guru_messages WHERE session_id = $1 ORDER BY created_at ASC',
+      'SELECT * FROM guide_messages WHERE session_id = $1 ORDER BY created_at ASC',
       [session.id]
     );
 
@@ -219,7 +219,7 @@ router.post('/sessions', authenticateToken, async (req, res) => {
   }
 });
 
-// Send message to guru
+// Send message to guide
 router.post('/sessions/:sessionId/messages', authenticateToken, async (req, res) => {
   const pool = req.app.locals.pool;
   const { sessionId } = req.params;
@@ -228,8 +228,8 @@ router.post('/sessions/:sessionId/messages', authenticateToken, async (req, res)
   try {
     // Get session with community info
     const sessionResult = await pool.query(`
-      SELECT gs.*, c.community_type, c.guru_persona
-      FROM guru_sessions gs
+      SELECT gs.*, c.community_type, c.guide_persona
+      FROM guide_sessions gs
       JOIN communities c ON gs.community_id = c.id
       WHERE gs.id = $1 AND gs.user_id = $2
     `, [sessionId, req.user.id]);
@@ -242,40 +242,40 @@ router.post('/sessions/:sessionId/messages', authenticateToken, async (req, res)
 
     // Get conversation history
     const history = await pool.query(
-      'SELECT role, content FROM guru_messages WHERE session_id = $1 ORDER BY created_at ASC',
+      'SELECT role, content FROM guide_messages WHERE session_id = $1 ORDER BY created_at ASC',
       [sessionId]
     );
 
     // Add user message
     await pool.query(`
-      INSERT INTO guru_messages (session_id, role, content)
+      INSERT INTO guide_messages (session_id, role, content)
       VALUES ($1, 'user', $2)
     `, [sessionId, content]);
 
-    // Generate guru response
-    const guruResponse = getGuruResponse(
+    // Generate guide response
+    const guideResponse = getGuideResponse(
       session.community_type,
-      session.guru_persona,
+      session.guide_persona,
       content,
       history.rows
     );
 
-    // Add guru response
-    const guruMessageResult = await pool.query(`
-      INSERT INTO guru_messages (session_id, role, content)
-      VALUES ($1, 'guru', $2)
+    // Add guide response
+    const guideMessageResult = await pool.query(`
+      INSERT INTO guide_messages (session_id, role, content)
+      VALUES ($1, 'guide', $2)
       RETURNING *
-    `, [sessionId, guruResponse]);
+    `, [sessionId, guideResponse]);
 
     // Update session
     await pool.query(
-      'UPDATE guru_sessions SET updated_at = CURRENT_TIMESTAMP, title = COALESCE(NULLIF(title, \'New conversation\'), $1) WHERE id = $2',
+      'UPDATE guide_sessions SET updated_at = CURRENT_TIMESTAMP, title = COALESCE(NULLIF(title, \'New conversation\'), $1) WHERE id = $2',
       [content.substring(0, 50), sessionId]
     );
 
     res.json({
       userMessage: { role: 'user', content },
-      guruMessage: guruMessageResult.rows[0]
+      guideMessage: guideMessageResult.rows[0]
     });
   } catch (err) {
     console.error(err);
@@ -290,14 +290,14 @@ router.get('/inspiration/:communityType', authenticateToken, async (req, res) =>
 
   try {
     const result = await pool.query(`
-      SELECT * FROM daily_inspirations 
-      WHERE community_type = $1 
-      ORDER BY RANDOM() 
+      SELECT * FROM daily_inspirations
+      WHERE community_type = $1
+      ORDER BY RANDOM()
       LIMIT 1
     `, [communityType]);
 
     if (result.rows.length === 0) {
-      return res.json({ 
+      return res.json({
         inspiration: {
           content: 'May peace and blessings be upon you today.',
           source: 'Traditional blessing'
