@@ -456,19 +456,53 @@ router.post('/waiting-list/:id/approve', authenticateToken, platformAdminOnly, a
 
     // Check if the applicant is a registered user - if so, link them as community admin
     const userResult = await pool.query(
-      `SELECT id, name, email FROM users WHERE email = $1`,
+      `SELECT id, name, email, role FROM users WHERE email = $1`,
       [entry.email]
     );
 
     if (userResult.rows.length > 0) {
       const user = userResult.rows[0];
 
-      // Upgrade user role to community_admin and set community_type
-      await pool.query(
-        `UPDATE users SET role = 'community_admin', community_type = $1, updated_at = NOW()
-         WHERE id = $2`,
-        [entry.community_type, user.id]
+      // IMPORTANT: Check if user is already a regular devotee (has memberships/access)
+      // Community admins should be separate from regular devotee users
+      const existingActivityResult = await pool.query(
+        `SELECT
+          (SELECT COUNT(*) FROM community_memberships WHERE user_id = $1) as memberships,
+          (SELECT COUNT(*) FROM active_community_access WHERE user_id = $1) as accesses`,
+        [user.id]
       );
+
+      const hasExistingActivity = existingActivityResult.rows[0].memberships > 0 ||
+                                   existingActivityResult.rows[0].accesses > 0;
+
+      // Only upgrade to community_admin if user has no existing devotee activity
+      // This maintains role separation: admins manage, devotees participate
+      if (!hasExistingActivity && user.role !== 'community_admin') {
+        await pool.query(
+          `UPDATE users SET role = 'community_admin', community_type = $1, updated_at = NOW()
+           WHERE id = $2`,
+          [entry.community_type, user.id]
+        );
+      } else if (hasExistingActivity) {
+        // User already has devotee activity - don't make them admin
+        // Instead, create placeholder admin and suggest creating separate admin account
+        await pool.query(
+          `INSERT INTO community_admins (community_id, admin_name, admin_email)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (community_id) DO UPDATE
+           SET admin_name = EXCLUDED.admin_name,
+               admin_email = EXCLUDED.admin_email`,
+          [communityId, entry.email.split('@')[0], entry.email]
+        );
+
+        return res.json({
+          success: true,
+          message: `Approved and created community "${communityName}". Note: ${entry.email} is already an active devotee user. Please create a separate admin account for this community.`,
+          requiresSeparateAdmin: true
+        });
+      }
+
+      // Only proceed with admin linking if user is eligible (no devotee activity)
 
       // Add as community admin
       await pool.query(
