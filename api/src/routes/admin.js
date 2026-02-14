@@ -389,11 +389,53 @@ router.post('/waiting-list/:id/approve', authenticateToken, platformAdminOnly, a
     }
 
     // Create the community as active (platform admin approved)
-    await pool.query(
+    const communityResult = await pool.query(
       `INSERT INTO communities (name, community_type, country, status, invite_link, short_description)
-       VALUES ($1, $2, 'United States', 'active', $3, $4)`,
+       VALUES ($1, $2, 'United States', 'active', $3, $4)
+       RETURNING id`,
       [communityName, entry.community_type, inviteLink, `Applied by ${entry.email}`]
     );
+    const communityId = communityResult.rows[0].id;
+
+    // Check if the applicant is a registered user - if so, link them as community admin
+    const userResult = await pool.query(
+      `SELECT id, name, email FROM users WHERE email = $1`,
+      [entry.email]
+    );
+
+    if (userResult.rows.length > 0) {
+      const user = userResult.rows[0];
+
+      // Upgrade user role to community_admin and set community_type
+      await pool.query(
+        `UPDATE users SET role = 'community_admin', community_type = $1, updated_at = NOW()
+         WHERE id = $2`,
+        [entry.community_type, user.id]
+      );
+
+      // Add as community admin
+      await pool.query(
+        `INSERT INTO community_admins (community_id, user_id, admin_name, admin_email)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (community_id) DO NOTHING`,
+        [communityId, user.id, user.name || entry.email, entry.email]
+      );
+
+      // Add membership (auto-approved)
+      await pool.query(
+        `INSERT INTO community_memberships (community_id, user_id, joined_via, status)
+         VALUES ($1, $2, 'admin', 'approved')
+         ON CONFLICT (community_id, user_id) DO NOTHING`,
+        [communityId, user.id]
+      );
+
+      // Notify the user
+      await pool.query(
+        `INSERT INTO notifications (user_id, community_id, type, title, message)
+         VALUES ($1, $2, 'approval', 'Community Approved!', $3)`,
+        [user.id, communityId, `Your community "${communityName}" has been approved and is now live.`]
+      );
+    }
 
     res.json({
       success: true,
