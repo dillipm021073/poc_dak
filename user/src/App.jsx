@@ -1082,16 +1082,56 @@ function EventsTab({ events, isViewOnly, community }) {
 function StreamsTab({ streams, community }) {
   const [expandedStream, setExpandedStream] = useState(null)
   const [showingLive, setShowingLive] = useState(false)
+  const [liveStreamData, setLiveStreamData] = useState(null)
   const liveStream = streams.find(s => s.isLive)
+
+  const handleWatchLive = async () => {
+    if (!showingLive) {
+      // Joining the live stream
+      try {
+        const data = await api.streams.getLive(community.id)
+        if (data.isLive && data.canJoin) {
+          setLiveStreamData(data.stream)
+          setShowingLive(true)
+        } else if (data.isLive && !data.canJoin) {
+          alert(data.message || 'Stream is at capacity')
+        }
+      } catch (err) {
+        console.error('Failed to join live stream:', err)
+      }
+    } else {
+      // Leaving the live stream
+      if (liveStream) {
+        try {
+          await api.streams.leave(liveStream.id)
+        } catch (err) {
+          console.error('Failed to leave stream:', err)
+        }
+      }
+      setShowingLive(false)
+      setLiveStreamData(null)
+    }
+  }
+
+  // Cleanup: leave stream when component unmounts
+  useEffect(() => {
+    return () => {
+      if (showingLive && liveStream) {
+        api.streams.leave(liveStream.id).catch(err => console.error('Failed to leave stream:', err))
+      }
+    }
+  }, [showingLive, liveStream])
+
+  const displayStream = liveStreamData || liveStream
 
   return (
     <div className="streams-tab">
       {liveStream && (
         <div className="live-stream-card">
           <span className="live-badge">🔴 LIVE</span>
-          <h4>{liveStream.title}</h4>
-          <p>{liveStream.currentViewers} watching</p>
-          <button className="btn btn-primary" onClick={() => setShowingLive(!showingLive)}>
+          <h4>{displayStream.title}</h4>
+          <p>{displayStream.currentViewers || liveStream.currentViewers || 0} watching</p>
+          <button className="btn btn-primary" onClick={handleWatchLive}>
             {showingLive ? 'Hide Stream' : 'Watch Now'}
           </button>
           {showingLive && liveStream.recordingUrl && (
