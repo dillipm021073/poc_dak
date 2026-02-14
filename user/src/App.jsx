@@ -34,6 +34,43 @@ const CommunitySymbol = ({ communityType, size = 24, color = 'var(--primary)' })
 }
 
 // ============================================================================
+// YOUTUBE VIDEO HELPER
+// ============================================================================
+
+function YouTubeEmbed({ url, title = 'Video' }) {
+  if (!url) return null
+
+  // Extract YouTube video ID from various URL formats
+  const getYouTubeId = (url) => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+      /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
+    ]
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern)
+      if (match) return match[1]
+    }
+    return null
+  }
+
+  const videoId = getYouTubeId(url)
+  if (!videoId) return null
+
+  return (
+    <div className="youtube-embed">
+      <iframe
+        src={`https://www.youtube.com/embed/${videoId}`}
+        title={title}
+        frameBorder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+  )
+}
+
+// ============================================================================
 // EVENT COLOR & MULTI-DAY HELPERS
 // ============================================================================
 
@@ -990,6 +1027,8 @@ function CommunityPage() {
 // ============================================================================
 
 function EventsTab({ events, isViewOnly, community }) {
+  const [expandedEvent, setExpandedEvent] = useState(null)
+
   if (isViewOnly) return <div className="view-only-message"><p>🔒 Activate Active Access to view the community calendar and events</p></div>
   if (events.length === 0) return <div className="empty-state">No upcoming events</div>
 
@@ -998,8 +1037,11 @@ function EventsTab({ events, isViewOnly, community }) {
       {events.map(event => {
         const color = getCommunityColor(community && community.id)
         const multiDay = isMultiDayEvent(event)
+        const isExpanded = expandedEvent === event.id
+        const hasVideo = event.videoUrl || event.recordingUrl
+
         return (
-          <div key={event.id} className={`event-card ${multiDay ? 'multi-day' : ''}`} style={{ borderLeft: `4px solid ${color.border}` }}>
+          <div key={event.id} className={`event-card ${multiDay ? 'multi-day' : ''} ${isExpanded ? 'expanded' : ''}`} style={{ borderLeft: `4px solid ${color.border}` }}>
             <div className="event-date" style={{ background: color.bg }}>
               <span className="month" style={{ color: color.border }}>{new Date(event.startsAt).toLocaleDateString('en', { month: 'short' })}</span>
               <span className="day">{new Date(event.startsAt).getDate()}</span>
@@ -1009,8 +1051,22 @@ function EventsTab({ events, isViewOnly, community }) {
               <h4>{event.title}</h4>
               <p className="event-time">{new Date(event.startsAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}{multiDay && ` - ${new Date(event.endsAt).toLocaleDateString('en', { month: 'short', day: 'numeric' })}`}{event.location && ` • ${event.location}`}{event.isVirtual && ' • Virtual'}</p>
               {event.description && <p className="event-description">{event.description}</p>}
+
+              {/* YouTube Video Section */}
+              {hasVideo && isExpanded && (
+                <div className="event-video-section">
+                  <YouTubeEmbed url={event.videoUrl || event.recordingUrl} title={event.title} />
+                </div>
+              )}
             </div>
-            <button className="btn btn-sm btn-outline" onClick={() => api.events.exportIcs(event.id)}>Add to Calendar</button>
+            <div className="event-actions">
+              <button className="btn btn-sm btn-outline" onClick={() => api.events.exportIcs(event.id)}>Add to Calendar</button>
+              {hasVideo && (
+                <button className="btn btn-sm btn-primary" onClick={() => setExpandedEvent(isExpanded ? null : event.id)}>
+                  {isExpanded ? 'Hide Video' : '▶ Watch Video'}
+                </button>
+              )}
+            </div>
             <div className="event-tooltip"><strong>{event.title}</strong>{community && <span>{community.name}</span>}<span>{new Date(event.startsAt).toLocaleString()}{multiDay && ` - ${new Date(event.endsAt).toLocaleString()}`}</span>{event.location && <span>{event.location}</span>}{event.description && <p>{event.description}</p>}</div>
           </div>
         )
@@ -1024,22 +1080,59 @@ function EventsTab({ events, isViewOnly, community }) {
 // ============================================================================
 
 function StreamsTab({ streams, community }) {
+  const [expandedStream, setExpandedStream] = useState(null)
   const liveStream = streams.find(s => s.isLive)
+
   return (
     <div className="streams-tab">
-      {liveStream && (<div className="live-stream-card"><span className="live-badge">🔴 LIVE</span><h4>{liveStream.title}</h4><p>{liveStream.currentViewers} watching</p><button className="btn btn-primary">Watch Now</button></div>)}
+      {liveStream && (
+        <div className="live-stream-card">
+          <span className="live-badge">🔴 LIVE</span>
+          <h4>{liveStream.title}</h4>
+          <p>{liveStream.currentViewers} watching</p>
+          <button className="btn btn-primary">Watch Now</button>
+        </div>
+      )}
       <h4>Upcoming & Past Streams</h4>
       {streams.length === 0 ? <div className="empty-state">No streams scheduled</div> : (
         <div className="streams-list">
-          {streams.filter(s => !s.isLive).map(stream => (
-            <div key={stream.id} className="stream-card">
-              <div className="stream-info">
-                <h5>{stream.title}</h5>
-                {stream.scheduledFor && <p className="stream-time">{new Date(stream.scheduledFor).toLocaleString()}</p>}
-                {stream.recordingUrl && <div className="recording-section">{community.hasActiveAccess ? <a href={stream.recordingUrl} className="btn btn-sm btn-primary">▶ Watch Recording</a> : <p className="gated-message">🔒 Active Access required to watch recording</p>}</div>}
+          {streams.filter(s => !s.isLive).map(stream => {
+            const isExpanded = expandedStream === stream.id
+            const hasRecording = stream.recordingUrl
+
+            return (
+              <div key={stream.id} className={`stream-card ${isExpanded ? 'expanded' : ''}`}>
+                <div className="stream-info">
+                  <h5>{stream.title}</h5>
+                  {stream.scheduledFor && <p className="stream-time">{new Date(stream.scheduledFor).toLocaleString()}</p>}
+                  {stream.description && <p className="stream-description">{stream.description}</p>}
+
+                  {/* YouTube Video for Recordings */}
+                  {hasRecording && isExpanded && community.hasActiveAccess && (
+                    <div className="stream-video-section">
+                      <YouTubeEmbed url={stream.recordingUrl} title={stream.title} />
+                    </div>
+                  )}
+
+                  {/* Recording Actions */}
+                  {hasRecording && (
+                    <div className="recording-section">
+                      {community.hasActiveAccess ? (
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => setExpandedStream(isExpanded ? null : stream.id)}
+                        >
+                          {isExpanded ? 'Hide Video' : '▶ Watch Recording'}
+                        </button>
+                      ) : (
+                        <p className="gated-message">🔒 Active Access required to watch recording</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

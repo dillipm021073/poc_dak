@@ -53,8 +53,8 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
 
     // Get upcoming events
     const eventsResult = await pool.query(
-      `SELECT id, title, description, starts_at, ends_at, location, is_virtual
-       FROM events 
+      `SELECT id, title, description, starts_at, ends_at, location, is_virtual, video_url
+       FROM events
        WHERE community_id = $1 AND starts_at >= NOW()
        ORDER BY starts_at ASC
        LIMIT 50`,
@@ -69,7 +69,8 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
         startsAt: event.starts_at,
         endsAt: event.ends_at,
         location: event.location,
-        isVirtual: event.is_virtual
+        isVirtual: event.is_virtual,
+        videoUrl: event.video_url
       })),
       isViewOnly: false
     });
@@ -136,6 +137,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       endsAt: event.ends_at,
       location: event.location,
       isVirtual: event.is_virtual,
+      videoUrl: event.video_url,
       communityId: event.community_id,
       communityName: event.community_name
     });
@@ -152,12 +154,12 @@ router.get('/calendar/my', authenticateToken, async (req, res) => {
   try {
     // Get events from communities where user has Active Access
     const result = await pool.query(
-      `SELECT e.id, e.title, e.description, e.starts_at, e.ends_at, 
-              e.location, e.is_virtual, c.id as community_id, c.name as community_name
+      `SELECT e.id, e.title, e.description, e.starts_at, e.ends_at,
+              e.location, e.is_virtual, e.video_url, c.id as community_id, c.name as community_name
        FROM events e
        JOIN communities c ON c.id = e.community_id
        JOIN active_community_access aca ON aca.community_id = e.community_id
-       WHERE aca.user_id = $1 
+       WHERE aca.user_id = $1
          AND aca.access_expires_at > NOW()
          AND e.starts_at >= NOW()
        ORDER BY e.starts_at ASC
@@ -173,6 +175,7 @@ router.get('/calendar/my', authenticateToken, async (req, res) => {
       endsAt: event.ends_at,
       location: event.location,
       isVirtual: event.is_virtual,
+      videoUrl: event.video_url,
       communityId: event.community_id,
       communityName: event.community_name
     })));

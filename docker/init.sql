@@ -181,6 +181,7 @@ CREATE TABLE events (
     ends_at TIMESTAMP,
     location VARCHAR(255),
     is_virtual BOOLEAN DEFAULT FALSE,
+    video_url VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -438,16 +439,16 @@ INSERT INTO community_memberships (community_id, user_id, joined_via, status) VA
 INSERT INTO active_community_access (user_id, community_id, access_expires_at, credit_amount) VALUES
 -- Judaism
 ('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '30 days', 0),
-('a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '15 days', 0),
+('a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP - INTERVAL '5 days', 0),
 -- Christianity
 ('a0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP + INTERVAL '45 days', 0),
-('a0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP + INTERVAL '20 days', 0),
+('a0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP - INTERVAL '3 days', 0),
 -- Islam
 ('a0000000-0000-0000-0000-000000000012', 'c0000000-0000-0000-0000-000000000003', CURRENT_TIMESTAMP + INTERVAL '60 days', 0),
-('a0000000-0000-0000-0000-000000000013', 'c0000000-0000-0000-0000-000000000003', CURRENT_TIMESTAMP + INTERVAL '10 days', 0),
+('a0000000-0000-0000-0000-000000000013', 'c0000000-0000-0000-0000-000000000003', CURRENT_TIMESTAMP - INTERVAL '7 days', 0),
 -- Hinduism
 ('a0000000-0000-0000-0000-000000000014', 'c0000000-0000-0000-0000-000000000004', CURRENT_TIMESTAMP + INTERVAL '30 days', 0),
-('a0000000-0000-0000-0000-000000000015', 'c0000000-0000-0000-0000-000000000004', CURRENT_TIMESTAMP + INTERVAL '25 days', 0);
+('a0000000-0000-0000-0000-000000000015', 'c0000000-0000-0000-0000-000000000004', CURRENT_TIMESTAMP - INTERVAL '2 days', 0);
 
 -- Sample payments (donations) for all communities
 INSERT INTO payments (id, user_id, community_id, amount, status, psp_transaction_id, days_granted, donation_method, comment, platform_fee, platform_fee_percent, created_at) VALUES
@@ -465,15 +466,15 @@ INSERT INTO payments (id, user_id, community_id, amount, status, psp_transaction
 ('b0000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000015', 'c0000000-0000-0000-0000-000000000004', 7.00, 'completed', 'pi_demo_402', 30, 'card', 'Om Shanti', 1.75, 25.00, CURRENT_TIMESTAMP - INTERVAL '8 days');
 
 -- Sample events
-INSERT INTO events (id, community_id, title, description, starts_at, ends_at, location, is_virtual) VALUES
-('e0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Service', 'Weekly Friday evening service with candle lighting', CURRENT_TIMESTAMP + INTERVAL '2 days', CURRENT_TIMESTAMP + INTERVAL '2 days' + INTERVAL '2 hours', 'Main Sanctuary', FALSE),
-('e0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study', 'Weekly Torah study with Rabbi Cohen', CURRENT_TIMESTAMP + INTERVAL '3 days', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '90 minutes', 'Library', FALSE),
-('e0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 'Online Havdalah', 'Virtual Havdalah ceremony via livestream', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '4 hours', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '5 hours', NULL, TRUE);
+INSERT INTO events (id, community_id, title, description, starts_at, ends_at, location, is_virtual, video_url) VALUES
+('e0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Service', 'Weekly Friday evening service with candle lighting', CURRENT_TIMESTAMP + INTERVAL '2 days', CURRENT_TIMESTAMP + INTERVAL '2 days' + INTERVAL '2 hours', 'Main Sanctuary', FALSE, 'https://www.youtube.com/watch?v=lEAFGPRoads'),
+('e0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study', 'Weekly Torah study with Rabbi Cohen', CURRENT_TIMESTAMP + INTERVAL '3 days', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '90 minutes', 'Library', FALSE, 'https://www.youtube.com/watch?v=XSh4Q8RbfMs'),
+('e0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 'Online Havdalah', 'Virtual Havdalah ceremony via livestream', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '4 hours', CURRENT_TIMESTAMP + INTERVAL '3 days' + INTERVAL '5 hours', NULL, TRUE, 'https://www.youtube.com/watch?v=T7WqefFznf4');
 
 -- Sample streams (with week tracking)
 INSERT INTO streams (id, community_id, title, description, scheduled_for, is_live, week_number, week_year, recording_url, recording_teaser_url) VALUES
-('d0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Morning Service', 'Live broadcast of our Shabbat morning service', CURRENT_TIMESTAMP + INTERVAL '3 days', FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, NULL, NULL),
-('d0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study Live', 'Interactive Torah study session', NULL, FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, 'https://storage.dak.com/recordings/demo.mp4', 'https://storage.dak.com/teasers/demo.mp4');
+('d0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Shabbat Morning Service', 'Live broadcast of our Shabbat morning service', CURRENT_TIMESTAMP + INTERVAL '3 days', FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, 'https://www.youtube.com/watch?v=lEAFGPRoads', NULL),
+('d0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'Torah Study Live', 'Interactive Torah study session', NULL, FALSE, EXTRACT(WEEK FROM CURRENT_TIMESTAMP)::INTEGER, EXTRACT(YEAR FROM CURRENT_TIMESTAMP)::INTEGER, 'https://www.youtube.com/watch?v=XSh4Q8RbfMs', NULL);
 
 -- Sample message thread
 INSERT INTO message_threads (id, community_id, user_id, last_message_at) VALUES

@@ -97,11 +97,18 @@ export const notifications = {
   markAllRead: () => api('/notifications/read-all', { method: 'POST' })
 };
 
+// Supports
+export const supports = {
+  getForCommunity: (communityId) => api(`/supports/community/${communityId}`),
+  acknowledge: (id, message) => api(`/supports/${id}/acknowledge`, { method: 'POST', body: JSON.stringify({ message }) })
+};
+
 export default {
   auth,
   communities,
   events,
   streams,
   messages,
-  notifications
+  notifications,
+  supports
 };

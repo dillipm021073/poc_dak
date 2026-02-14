@@ -140,6 +140,7 @@ function App() {
         {activeTab === 'events' && <EventsTab community={community} />}
         {activeTab === 'streams' && <StreamsTab community={community} />}
         {activeTab === 'messages' && <MessagesTab community={community} />}
+        {activeTab === 'supports' && <SupportsTab community={community} />}
         {activeTab === 'members' && <MembersTab community={community} />}
       </main>
     </div>
@@ -612,6 +613,7 @@ function Sidebar({ community, activeTab, onTabChange, onLogout }) {
     { id: 'events', icon: '📅', label: 'Events' },
     { id: 'streams', icon: '📺', label: 'Streams' },
     { id: 'messages', icon: '💬', label: 'Messages' },
+    { id: 'supports', icon: '💰', label: 'Supports' },
     { id: 'members', icon: '👥', label: 'Members' }
   ]
 
@@ -1331,6 +1333,234 @@ function MessagesTab({ community }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// SUPPORTS TAB
+// ============================================================================
+
+function SupportsTab({ community }) {
+  const [donations, setDonations] = useState([])
+  const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [nameFilter, setNameFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [ackSupportId, setAckSupportId] = useState(null)
+  const [ackMessage, setAckMessage] = useState('')
+  const [ackLoading, setAckLoading] = useState(false)
+
+  useEffect(() => {
+    loadSupports()
+  }, [community.id])
+
+  const loadSupports = async () => {
+    try {
+      const data = await api.supports.getForCommunity(community.id)
+      setDonations(data.donations || [])
+      setSummary(data.summary || null)
+    } catch (err) {
+      console.error('Failed to load supports:', err)
+    }
+    setLoading(false)
+  }
+
+  const handleAcknowledge = async (supportId) => {
+    if (!ackMessage.trim()) return
+    setAckLoading(true)
+    try {
+      await api.supports.acknowledge(supportId, ackMessage)
+      setAckSupportId(null)
+      setAckMessage('')
+      loadSupports()
+    } catch (err) {
+      alert(err.message)
+    }
+    setAckLoading(false)
+  }
+
+  const filteredDonations = donations.filter(d => {
+    if (nameFilter) {
+      const q = nameFilter.toLowerCase()
+      if (!(d.donor_name || '').toLowerCase().includes(q) && !(d.donor_email || '').toLowerCase().includes(q)) return false
+    }
+    if (dateFrom) {
+      if (new Date(d.created_at) < new Date(dateFrom)) return false
+    }
+    if (dateTo) {
+      const end = new Date(dateTo)
+      end.setHours(23, 59, 59, 999)
+      if (new Date(d.created_at) > end) return false
+    }
+    return true
+  })
+
+  const exportCsv = () => {
+    const headers = ['Name', 'Email', 'Date', 'Amount', 'Currency', 'Type', 'Status', 'Platform Fee', 'Note']
+    const rows = filteredDonations.map(d => [
+      d.donor_name || '',
+      d.donor_email || '',
+      new Date(d.created_at).toLocaleDateString(),
+      d.amount,
+      d.currency || 'USD',
+      d.support_type || '',
+      d.status || '',
+      d.platform_fee || '',
+      (d.note || '').replace(/"/g, '""')
+    ])
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.map(v => `"${v}"`).join(','))
+    ].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${community.name.replace(/[^a-zA-Z0-9]/g, '_')}_supports_${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  if (loading) return <div className="loading">Loading support payments...</div>
+
+  return (
+    <div className="supports-tab">
+      <div className="page-header">
+        <h1>Support Payments</h1>
+        <p>View and manage support payments from your community members</p>
+      </div>
+
+      {summary && (
+        <div className="stats-summary">
+          <div className="stat-item">
+            <span className="stat-value">{summary.total_donations}</span>
+            <span className="stat-label">Total Payments</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">${summary.total_amount}</span>
+            <span className="stat-label">Total Amount</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value" style={{ color: '#16a34a' }}>${summary.net_amount}</span>
+            <span className="stat-label">Net Amount</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value" style={{ color: '#f59e0b' }}>${summary.platform_fees}</span>
+            <span className="stat-label">Platform Fees</span>
+          </div>
+        </div>
+      )}
+
+      <div className="supports-filters">
+        <input
+          type="text"
+          placeholder="Search by name or email..."
+          value={nameFilter}
+          onChange={(e) => setNameFilter(e.target.value)}
+          className="filter-input"
+        />
+        <div className="filter-date-group">
+          <label>From</label>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </div>
+        <div className="filter-date-group">
+          <label>To</label>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
+        {(nameFilter || dateFrom || dateTo) && (
+          <button className="btn btn-sm btn-outline" onClick={() => { setNameFilter(''); setDateFrom(''); setDateTo('') }}>Clear</button>
+        )}
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-sm btn-primary" onClick={exportCsv} disabled={filteredDonations.length === 0}>
+          Export CSV ({filteredDonations.length})
+        </button>
+      </div>
+
+      {filteredDonations.length === 0 ? (
+        <div className="empty-state">
+          {donations.length === 0 ? 'No support payments received yet' : 'No payments match your filters'}
+        </div>
+      ) : (
+        <div className="table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Supporter</th>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Note</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredDonations.map(d => (
+                <tr key={d.id}>
+                  <td>
+                    <div className="member-cell">
+                      <strong>{d.donor_name || 'Unknown'}</strong>
+                      <span className="text-secondary">{d.donor_email}</span>
+                    </div>
+                  </td>
+                  <td>{new Date(d.created_at).toLocaleDateString()}</td>
+                  <td><strong>${parseFloat(d.amount).toFixed(2)}</strong></td>
+                  <td>
+                    <span className={`status-badge ${d.support_type === 'recurring' ? 'active' : 'pending'}`}>
+                      {d.support_type === 'recurring' ? 'Recurring' : 'One-time'}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`status-badge ${d.status === 'completed' ? 'active' : d.status === 'cancelled' ? 'rejected' : 'pending'}`}>
+                      {d.status}
+                    </span>
+                  </td>
+                  <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {d.note || '—'}
+                  </td>
+                  <td>
+                    {ackSupportId === d.id ? (
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          value={ackMessage}
+                          onChange={(e) => setAckMessage(e.target.value)}
+                          placeholder="Thank you message..."
+                          style={{ padding: '4px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', width: 160 }}
+                        />
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => handleAcknowledge(d.id)}
+                          disabled={ackLoading || !ackMessage.trim()}
+                        >
+                          {ackLoading ? '...' : 'Send'}
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={() => { setAckSupportId(null); setAckMessage('') }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn btn-sm btn-outline"
+                        onClick={() => { setAckSupportId(d.id); setAckMessage('') }}
+                      >
+                        Thank {d.ack_count > 0 ? `(${d.ack_count})` : ''}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

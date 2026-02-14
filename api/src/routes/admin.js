@@ -140,7 +140,7 @@ router.get('/communities', authenticateToken, platformAdminOnly, async (req, res
 
     if (search) {
       params.push(`%${search}%`);
-      conditions.push(`(LOWER(c.name) LIKE LOWER($${params.length}) OR LOWER(c.country) LIKE LOWER($${params.length}))`);
+      conditions.push(`(LOWER(c.name) LIKE LOWER($${params.length}) OR LOWER(c.country) LIKE LOWER($${params.length}) OR LOWER(ca.admin_name) LIKE LOWER($${params.length}) OR LOWER(ca.admin_email) LIKE LOWER($${params.length}))`);
     }
 
     if (adminEmail) {
@@ -361,13 +361,14 @@ router.get('/waiting-list', authenticateToken, platformAdminOnly, async (req, re
   const pool = req.app.locals.pool;
 
   try {
-    const conditions = [`status != 'approved'`];
+    const conditions = [];
     const params = [];
 
-    if (status && status !== 'pending') {
-      // Allow filtering by specific status (pending, rejected)
+    if (status) {
       params.push(status);
       conditions.push(`status = $${params.length}`);
+    } else {
+      conditions.push(`status != 'approved'`);
     }
 
     if (communityType) {
