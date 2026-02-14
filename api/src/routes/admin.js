@@ -112,7 +112,7 @@ router.get('/stats', authenticateToken, platformAdminOnly, async (req, res) => {
 
 // Get all communities
 router.get('/communities', authenticateToken, platformAdminOnly, async (req, res) => {
-  const { status, startDate, endDate } = req.query;
+  const { status, startDate, endDate, search, communityType, adminEmail } = req.query;
   const pool = req.app.locals.pool;
 
   try {
@@ -127,18 +127,37 @@ router.get('/communities', authenticateToken, platformAdminOnly, async (req, res
 
     const conditions = [];
     const params = [];
+
     if (status) {
       params.push(status);
       conditions.push(`c.status = $${params.length}`);
     }
+
+    if (communityType) {
+      params.push(communityType);
+      conditions.push(`c.community_type = $${params.length}`);
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(LOWER(c.name) LIKE LOWER($${params.length}) OR LOWER(c.country) LIKE LOWER($${params.length}))`);
+    }
+
+    if (adminEmail) {
+      params.push(`%${adminEmail}%`);
+      conditions.push(`LOWER(ca.admin_email) LIKE LOWER($${params.length})`);
+    }
+
     if (startDate) {
       params.push(startDate);
       conditions.push(`c.created_at >= $${params.length}::date`);
     }
+
     if (endDate) {
       params.push(endDate);
       conditions.push(`c.created_at < ($${params.length}::date + interval '1 day')`);
     }
+
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(' AND ')}`;
     }
@@ -270,7 +289,7 @@ router.post('/communities/:id/reactivate', authenticateToken, platformAdminOnly,
 
 // Get all users
 router.get('/users', authenticateToken, platformAdminOnly, async (req, res) => {
-  const { startDate, endDate, role } = req.query;
+  const { startDate, endDate, role, search, email, communityType } = req.query;
   const pool = req.app.locals.pool;
 
   try {
@@ -284,18 +303,37 @@ router.get('/users', authenticateToken, platformAdminOnly, async (req, res) => {
 
     const conditions = [`u.role != 'platform_admin'`];
     const params = [];
+
     if (role) {
       params.push(role);
       conditions.push(`u.role = $${params.length}`);
     }
+
+    if (communityType) {
+      params.push(communityType);
+      conditions.push(`u.community_type = $${params.length}`);
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(LOWER(u.name) LIKE LOWER($${params.length}) OR LOWER(u.email) LIKE LOWER($${params.length}))`);
+    }
+
+    if (email) {
+      params.push(`%${email}%`);
+      conditions.push(`LOWER(u.email) LIKE LOWER($${params.length})`);
+    }
+
     if (startDate) {
       params.push(startDate);
       conditions.push(`u.created_at >= $${params.length}::date`);
     }
+
     if (endDate) {
       params.push(endDate);
       conditions.push(`u.created_at < ($${params.length}::date + interval '1 day')`);
     }
+
     query += ` WHERE ${conditions.join(' AND ')}`;
     query += ` ORDER BY u.created_at DESC LIMIT 500`;
 
@@ -319,20 +357,39 @@ router.get('/users', authenticateToken, platformAdminOnly, async (req, res) => {
 
 // Get waiting list (pending and rejected entries only - approved become communities)
 router.get('/waiting-list', authenticateToken, platformAdminOnly, async (req, res) => {
-  const { communityType, startDate, endDate } = req.query;
+  const { communityType, startDate, endDate, search, email, status } = req.query;
   const pool = req.app.locals.pool;
 
   try {
     const conditions = [`status != 'approved'`];
     const params = [];
+
+    if (status && status !== 'pending') {
+      // Allow filtering by specific status (pending, rejected)
+      params.push(status);
+      conditions.push(`status = $${params.length}`);
+    }
+
     if (communityType) {
       params.push(communityType);
       conditions.push(`community_type = $${params.length}`);
     }
+
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(LOWER(email) LIKE LOWER($${params.length}) OR LOWER(recommended_institution) LIKE LOWER($${params.length}))`);
+    }
+
+    if (email) {
+      params.push(`%${email}%`);
+      conditions.push(`LOWER(email) LIKE LOWER($${params.length})`);
+    }
+
     if (startDate) {
       params.push(startDate);
       conditions.push(`created_at >= $${params.length}::date`);
     }
+
     if (endDate) {
       params.push(endDate);
       conditions.push(`created_at < ($${params.length}::date + interval '1 day')`);
@@ -417,7 +474,10 @@ router.post('/waiting-list/:id/approve', authenticateToken, platformAdminOnly, a
       await pool.query(
         `INSERT INTO community_admins (community_id, user_id, admin_name, admin_email)
          VALUES ($1, $2, $3, $4)
-         ON CONFLICT (community_id) DO NOTHING`,
+         ON CONFLICT (community_id) DO UPDATE
+         SET user_id = EXCLUDED.user_id,
+             admin_name = EXCLUDED.admin_name,
+             admin_email = EXCLUDED.admin_email`,
         [communityId, user.id, user.name || entry.email, entry.email]
       );
 
@@ -434,6 +494,16 @@ router.post('/waiting-list/:id/approve', authenticateToken, platformAdminOnly, a
         `INSERT INTO notifications (user_id, community_id, type, title, message)
          VALUES ($1, $2, 'approval', 'Community Approved!', $3)`,
         [user.id, communityId, `Your community "${communityName}" has been approved and is now live.`]
+      );
+    } else {
+      // If no user exists, still create a placeholder community admin entry with just email
+      await pool.query(
+        `INSERT INTO community_admins (community_id, admin_name, admin_email)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (community_id) DO UPDATE
+         SET admin_name = EXCLUDED.admin_name,
+             admin_email = EXCLUDED.admin_email`,
+        [communityId, entry.email.split('@')[0], entry.email]
       );
     }
 
@@ -550,7 +620,7 @@ router.post('/communities/:id/reject', authenticateToken, platformAdminOnly, asy
 
 // Get payment history (for reporting)
 router.get('/payments', authenticateToken, platformAdminOnly, async (req, res) => {
-  const { communityId, status, startDate, endDate } = req.query;
+  const { communityId, status, startDate, endDate, search, userEmail, communityName, minAmount, maxAmount } = req.query;
   const pool = req.app.locals.pool;
 
   try {
@@ -572,6 +642,31 @@ router.get('/payments', authenticateToken, platformAdminOnly, async (req, res) =
     if (status) {
       params.push(status);
       conditions.push(`p.status = $${params.length}`);
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(LOWER(u.name) LIKE LOWER($${params.length}) OR LOWER(u.email) LIKE LOWER($${params.length}) OR LOWER(c.name) LIKE LOWER($${params.length}))`);
+    }
+
+    if (userEmail) {
+      params.push(`%${userEmail}%`);
+      conditions.push(`LOWER(u.email) LIKE LOWER($${params.length})`);
+    }
+
+    if (communityName) {
+      params.push(`%${communityName}%`);
+      conditions.push(`LOWER(c.name) LIKE LOWER($${params.length})`);
+    }
+
+    if (minAmount) {
+      params.push(parseFloat(minAmount));
+      conditions.push(`p.amount >= $${params.length}`);
+    }
+
+    if (maxAmount) {
+      params.push(parseFloat(maxAmount));
+      conditions.push(`p.amount <= $${params.length}`);
     }
 
     if (startDate) {
