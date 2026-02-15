@@ -326,7 +326,15 @@ function exportToCSV(data, columns, filename) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`
+  // Generate timestamp in YYYY_MM_DD_HH24_MI_SS format
+  const now = new Date()
+  const timestamp = now.getFullYear() +
+    '_' + String(now.getMonth() + 1).padStart(2, '0') +
+    '_' + String(now.getDate()).padStart(2, '0') +
+    '_' + String(now.getHours()).padStart(2, '0') +
+    '_' + String(now.getMinutes()).padStart(2, '0') +
+    '_' + String(now.getSeconds()).padStart(2, '0')
+  link.download = `${filename}_${timestamp}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }

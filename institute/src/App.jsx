@@ -1638,6 +1638,44 @@ function MembersTab({ community }) {
     setAccessLoading(false)
   }
 
+  const exportToCSV = () => {
+    // Generate filename with timestamp
+    const now = new Date()
+    const timestamp = now.getFullYear() +
+      '_' + String(now.getMonth() + 1).padStart(2, '0') +
+      '_' + String(now.getDate()).padStart(2, '0') +
+      '_' + String(now.getHours()).padStart(2, '0') +
+      '_' + String(now.getMinutes()).padStart(2, '0') +
+      '_' + String(now.getSeconds()).padStart(2, '0')
+    const filename = `members_${community.name.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.csv`
+
+    // Prepare CSV data
+    const headers = ['Name', 'Email', 'Joined Date', 'Joined Via', 'Membership Status', 'Access Status', 'Access Expires', 'Credit Pending']
+    const rows = members.map(member => [
+      member.name || 'Unnamed',
+      member.email,
+      member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '',
+      member.joinedVia || '',
+      member.membershipStatus || 'approved',
+      member.hasActiveAccess ? 'Active' : 'View-Only',
+      member.accessExpiresAt ? new Date(member.accessExpiresAt).toLocaleDateString() : '',
+      `$${(member.creditAmount || 0).toFixed(2)}`
+    ])
+
+    // Create CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n')
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    link.click()
+  }
+
   const pendingMembers = members.filter(m => m.membershipStatus === 'pending')
   const approvedMembers = members.filter(m => m.membershipStatus === 'approved' || (!m.membershipStatus && m.membershipStatus !== 'rejected'))
   const activeCount = approvedMembers.filter(m => m.hasActiveAccess).length
@@ -1647,8 +1685,18 @@ function MembersTab({ community }) {
   return (
     <div className="members-tab">
       <div className="page-header">
-        <h1>Members</h1>
-        <p>Manage your community members</p>
+        <div>
+          <h1>Members</h1>
+          <p>Manage your community members</p>
+        </div>
+        <button className="btn btn-outline" onClick={exportToCSV}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Export CSV
+        </button>
       </div>
 
       <div className="stats-summary">
