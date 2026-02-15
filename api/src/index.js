@@ -16,6 +16,7 @@ const messageRoutes = require('./routes/messages');
 const notificationRoutes = require('./routes/notifications');
 const adminRoutes = require('./routes/admin');
 const waitingListRoutes = require('./routes/waitingList');
+const supportsRoutes = require('./routes/supports');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -54,6 +55,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/waiting-list', waitingListRoutes);
+app.use('/api/supports', supportsRoutes);
 
 // 404 handler
 app.use((req, res) => {
