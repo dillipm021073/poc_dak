@@ -475,26 +475,38 @@ router.get('/:id/analytics', authenticateToken, async (req, res) => {
       [id]
     );
 
-    // Get monthly activity
-    const yearMonth = new Date().toISOString().slice(0, 7);
-    const activityResult = await pool.query(
-      `SELECT total_collected, platform_fee_total FROM monthly_community_activity 
-       WHERE community_id = $1 AND year_month = $2`,
-      [id, yearMonth]
+    // Get monthly activity - calculate from payments table for current month
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthlyPaymentsResult = await pool.query(
+      `SELECT
+         COALESCE(SUM(amount), 0) as total_collected,
+         COALESCE(SUM(platform_fee), 0) as platform_fee_total
+       FROM payments
+       WHERE community_id = $1
+         AND status = 'completed'
+         AND created_at >= $2
+         AND created_at < $3`,
+      [id, firstDayOfMonth, new Date(now.getFullYear(), now.getMonth() + 1, 1)]
     );
 
     // Get recent analytics
     const analyticsResult = await pool.query(
-      `SELECT * FROM community_analytics 
-       WHERE community_id = $1 
+      `SELECT * FROM community_analytics
+       WHERE community_id = $1
        ORDER BY date DESC LIMIT 30`,
       [id]
     );
 
+    const monthlyActivity = monthlyPaymentsResult.rows[0] || { total_collected: 0, platform_fee_total: 0 };
+
     res.json({
       activeSubscribers: parseInt(subscriberResult.rows[0].count),
       totalMembers: parseInt(memberResult.rows[0].count),
-      monthlyActivity: activityResult.rows[0] || { total_collected: 0, platform_fee_total: 0 },
+      monthlyActivity: {
+        total_collected: parseFloat(monthlyActivity.total_collected).toFixed(2),
+        platform_fee_total: parseFloat(monthlyActivity.platform_fee_total).toFixed(2)
+      },
       recentAnalytics: analyticsResult.rows
     });
   } catch (err) {
