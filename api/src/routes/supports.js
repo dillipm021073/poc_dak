@@ -60,7 +60,7 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
     // Check if admin
     const adminCheck = await pool.query(
       'SELECT * FROM community_admins WHERE community_id = $1 AND user_id = $2',
-      [communityId, req.user.id]
+      [communityId, req.user.userId]
     );
 
     if (adminCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
@@ -68,20 +68,30 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
     }
 
     const result = await pool.query(`
-      SELECT s.*, 
+      SELECT p.id,
+             p.amount,
+             p.currency,
+             p.status,
+             p.days_granted,
+             p.donation_method,
+             p.comment as note,
+             p.platform_fee,
+             p.platform_fee_percent,
+             p.created_at,
              u.name as donor_name,
              u.email as donor_email,
-             (SELECT COUNT(*) FROM donation_acknowledgments WHERE support_id = s.id) as ack_count
-      FROM supports s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.community_id = $1
-      ORDER BY s.created_at DESC
+             0 as ack_count
+      FROM payments p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.community_id = $1
+      ORDER BY p.created_at DESC
     `, [communityId]);
 
     // Calculate summary
     const completed = result.rows.filter(s => s.status === 'completed');
     const totalAmount = completed.reduce((sum, s) => sum + parseFloat(s.amount), 0);
-    const netAmount = totalAmount * 0.95; // After 5% platform fee
+    const totalPlatformFees = completed.reduce((sum, s) => sum + parseFloat(s.platform_fee || 0), 0);
+    const netAmount = totalAmount - totalPlatformFees;
 
     res.json({
       donations: result.rows,
@@ -89,7 +99,7 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
         total_donations: completed.length,
         total_amount: totalAmount.toFixed(2),
         net_amount: netAmount.toFixed(2),
-        platform_fees: (totalAmount * 0.05).toFixed(2)
+        platform_fees: totalPlatformFees.toFixed(2)
       }
     });
   } catch (err) {
