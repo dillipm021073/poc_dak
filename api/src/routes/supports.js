@@ -57,13 +57,18 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
   const { communityId } = req.params;
 
   try {
+    console.log('GET /supports/community/:communityId', { communityId, userId: req.user.userId, role: req.user.role });
+
     // Check if admin
     const adminCheck = await pool.query(
       'SELECT * FROM community_admins WHERE community_id = $1 AND user_id = $2',
       [communityId, req.user.userId]
     );
 
+    console.log('Admin check result:', { isAdmin: adminCheck.rows.length > 0, role: req.user.role });
+
     if (adminCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      console.log('Not authorized - returning 403');
       return res.status(403).json({ error: 'Not authorized' });
     }
 
@@ -87,13 +92,15 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
       ORDER BY p.created_at DESC
     `, [communityId]);
 
+    console.log('Payments query result:', { rowCount: result.rows.length, payments: result.rows });
+
     // Calculate summary
     const completed = result.rows.filter(s => s.status === 'completed');
     const totalAmount = completed.reduce((sum, s) => sum + parseFloat(s.amount), 0);
     const totalPlatformFees = completed.reduce((sum, s) => sum + parseFloat(s.platform_fee || 0), 0);
     const netAmount = totalAmount - totalPlatformFees;
 
-    res.json({
+    const response = {
       donations: result.rows,
       summary: {
         total_donations: completed.length,
@@ -101,7 +108,10 @@ router.get('/community/:communityId', authenticateToken, async (req, res) => {
         net_amount: netAmount.toFixed(2),
         platform_fees: totalPlatformFees.toFixed(2)
       }
-    });
+    };
+
+    console.log('Sending response:', response);
+    res.json(response);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch support payments' });
