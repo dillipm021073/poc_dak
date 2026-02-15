@@ -1761,9 +1761,12 @@ function MembersTab({ community }) {
                         : '—'}
                     </td>
                     <td>
-                      {member.creditAmount > 0
-                        ? <span style={{ color: '#16a34a', fontWeight: 600 }}>${member.creditAmount.toFixed(2)}</span>
-                        : <span className="text-secondary">—</span>}
+                      <span style={{
+                        color: member.creditAmount > 0 ? '#16a34a' : '#6b7280',
+                        fontWeight: member.creditAmount > 0 ? 600 : 400
+                      }}>
+                        ${(member.creditAmount || 0).toFixed(2)}
+                      </span>
                     </td>
                     <td>
                       {editingAccessForUser === member.id ? (
