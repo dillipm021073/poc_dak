@@ -817,6 +817,9 @@ function SettingsTab({ community, onUpdate }) {
               onChange={(e) => setFormData({...formData, coverImageUrl: e.target.value})}
               placeholder="https://..."
             />
+            {formData.coverImageUrl && (
+              <img src={formData.coverImageUrl} alt="Cover Preview" className="image-preview" style={{ maxHeight: '200px', width: '100%', objectFit: 'cover', borderRadius: '8px', marginTop: '12px' }} />
+            )}
           </div>
         </div>
 

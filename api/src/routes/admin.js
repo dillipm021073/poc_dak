@@ -112,7 +112,7 @@ router.get('/stats', authenticateToken, platformAdminOnly, async (req, res) => {
 
 // Get all communities
 router.get('/communities', authenticateToken, platformAdminOnly, async (req, res) => {
-  const { status, startDate, endDate, search, communityType, adminEmail } = req.query;
+  const { status, startDate, endDate, search, communityType, adminEmail, communityName, adminName } = req.query;
   const pool = req.app.locals.pool;
 
   try {
@@ -138,7 +138,20 @@ router.get('/communities', authenticateToken, platformAdminOnly, async (req, res
       conditions.push(`c.community_type = $${params.length}`);
     }
 
-    if (search) {
+    // Specific filter for community name
+    if (communityName) {
+      params.push(`%${communityName}%`);
+      conditions.push(`LOWER(c.name) LIKE LOWER($${params.length})`);
+    }
+
+    // Specific filter for admin name
+    if (adminName) {
+      params.push(`%${adminName}%`);
+      conditions.push(`LOWER(ca.admin_name) LIKE LOWER($${params.length})`);
+    }
+
+    // Generic search (backward compatibility) - only if specific filters not used
+    if (search && !communityName && !adminName) {
       params.push(`%${search}%`);
       conditions.push(`(LOWER(c.name) LIKE LOWER($${params.length}) OR LOWER(c.country) LIKE LOWER($${params.length}) OR LOWER(ca.admin_name) LIKE LOWER($${params.length}) OR LOWER(ca.admin_email) LIKE LOWER($${params.length}))`);
     }

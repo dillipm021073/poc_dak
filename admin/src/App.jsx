@@ -525,26 +525,28 @@ function DashboardTab() {
 
 function CommunitiesTab() {
   const [communities, setCommunities] = useState([])
-  const [filter, setFilter] = useState('')
-  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [communityName, setCommunityName] = useState('')
   const [communityType, setCommunityType] = useState('')
+  const [adminName, setAdminName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [appliedFilters, setAppliedFilters] = useState({ startDate: '', endDate: '', search: '', communityType: '' })
+  const [appliedFilters, setAppliedFilters] = useState({ startDate: '', endDate: '', communityName: '', communityType: '', adminName: '' })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadCommunities()
-  }, [filter, appliedFilters])
+  }, [statusFilter, appliedFilters])
 
   const loadCommunities = async () => {
     try {
       const params = {}
-      if (filter) params.status = filter
+      if (statusFilter) params.status = statusFilter
       if (appliedFilters.startDate) params.startDate = appliedFilters.startDate
       if (appliedFilters.endDate) params.endDate = appliedFilters.endDate
-      if (appliedFilters.search) params.search = appliedFilters.search
+      if (appliedFilters.communityName) params.communityName = appliedFilters.communityName
       if (appliedFilters.communityType) params.communityType = appliedFilters.communityType
+      if (appliedFilters.adminName) params.adminName = appliedFilters.adminName
       const data = await api.admin.getCommunities(params)
       setCommunities(data)
     } catch (err) {
@@ -553,8 +555,15 @@ function CommunitiesTab() {
     setLoading(false)
   }
 
-  const applyFilters = () => setAppliedFilters({ startDate, endDate, search, communityType })
-  const clearAllFilters = () => { setSearch(''); setCommunityType(''); setStartDate(''); setEndDate(''); setAppliedFilters({ startDate: '', endDate: '', search: '', communityType: '' }) }
+  const applyFilters = () => setAppliedFilters({ startDate, endDate, communityName, communityType, adminName })
+  const clearAllFilters = () => {
+    setCommunityName('');
+    setCommunityType('');
+    setAdminName('');
+    setStartDate('');
+    setEndDate('');
+    setAppliedFilters({ startDate: '', endDate: '', communityName: '', communityType: '', adminName: '' })
+  }
 
   const handleExport = () => {
     exportToCSV(communities, [
@@ -611,7 +620,7 @@ function CommunitiesTab() {
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="filter-buttons">
             {['', 'pending', 'active', 'suspended'].map(s => (
-              <button key={s} className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-outline'}`} onClick={() => setFilter(s)}>
+              <button key={s} className={`btn btn-sm ${statusFilter === s ? 'btn-primary' : 'btn-outline'}`} onClick={() => setStatusFilter(s)}>
                 {s || 'All'}
               </button>
             ))}
@@ -622,24 +631,34 @@ function CommunitiesTab() {
       <div className="advanced-filters">
         <input
           type="text"
-          placeholder="Search by name or admin email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Community name..."
+          value={communityName}
+          onChange={(e) => setCommunityName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
           className="filter-input"
+          style={{ minWidth: 160 }}
         />
         <select value={communityType} onChange={(e) => setCommunityType(e.target.value)} className="filter-select">
-          <option value="">All Networks</option>
+          <option value="">All Types</option>
           <option value="judaism">Judaism</option>
           <option value="christianity">Christianity</option>
           <option value="islam">Islam</option>
           <option value="hinduism">Hinduism</option>
         </select>
+        <input
+          type="text"
+          placeholder="Admin name..."
+          value={adminName}
+          onChange={(e) => setAdminName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+          className="filter-input"
+          style={{ minWidth: 140 }}
+        />
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="filter-date" />
         <span className="filter-separator">to</span>
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="filter-date" />
         <button className="btn btn-sm btn-primary" onClick={applyFilters}>Apply</button>
-        {(search || communityType || startDate || endDate) && (
+        {(communityName || communityType || adminName || startDate || endDate) && (
           <button className="btn btn-sm btn-outline" onClick={clearAllFilters}>Clear</button>
         )}
       </div>

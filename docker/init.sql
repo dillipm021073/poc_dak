@@ -357,13 +357,15 @@ INSERT INTO users (id, email, password_hash, name, role, community_type) VALUES
 ('a0000000-0000-0000-0000-000000000002', 'rabbi@temple.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Rabbi David Cohen', 'community_admin', 'judaism'),
 ('a0000000-0000-0000-0000-000000000005', 'pastor@stmary.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Pastor James Smith', 'community_admin', 'christianity'),
 ('a0000000-0000-0000-0000-000000000006', 'imam@islamic.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Imam Ahmad Hassan', 'community_admin', 'islam'),
-('a0000000-0000-0000-0000-000000000007', 'pandit@temple.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Pandit Sharma', 'community_admin', 'hinduism');
+('a0000000-0000-0000-0000-000000000007', 'pandit@temple.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Pandit Sharma', 'community_admin', 'hinduism'),
+('a0000000-0000-0000-0000-000000000020', 'cantor@shalom.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Cantor Rachel Levy', 'community_admin', 'judaism');
 
 -- Regular users / devotees (password: admin123)
 -- Judaism devotees
 INSERT INTO users (id, email, password_hash, name, role, community_type) VALUES
 ('a0000000-0000-0000-0000-000000000003', 'sarah@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Sarah Miller', 'user', 'judaism'),
-('a0000000-0000-0000-0000-000000000004', 'david@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'David Green', 'user', 'judaism');
+('a0000000-0000-0000-0000-000000000004', 'david@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'David Green', 'user', 'judaism'),
+('a0000000-0000-0000-0000-000000000021', 'rachel@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Rachel Goldstein', 'user', 'judaism');
 
 -- Christianity devotees
 INSERT INTO users (id, email, password_hash, name, role, community_type) VALUES
@@ -381,52 +383,72 @@ INSERT INTO users (id, email, password_hash, name, role, community_type) VALUES
 ('a0000000-0000-0000-0000-000000000015', 'arjun@example.com', '$2b$10$678wuS1uREuaiitdzK5hZ.3QYSc8i0uyt26UoE8UJl8QECsErjyuK', 'Arjun Sharma', 'user', 'hinduism');
 
 -- Communities (one per type for demo)
-INSERT INTO communities (id, name, community_type, country, status, invite_link, about_text, head_of_institution, message_of_day, short_description) VALUES
-('c0000000-0000-0000-0000-000000000001', 'Temple Beth Israel', 'judaism', 'United States', 'active', 'temple-beth-israel', 
+INSERT INTO communities (id, name, community_type, country, status, invite_link, about_text, head_of_institution, message_of_day, short_description, logo_url, cover_image_url) VALUES
+('c0000000-0000-0000-0000-000000000001', 'Temple Beth Israel', 'judaism', 'United States', 'active', 'temple-beth-israel',
  'A welcoming Jewish community dedicated to Torah study, prayer, and acts of loving kindness.',
  'Rabbi David Cohen',
  'Shalom! May this day bring you peace and wisdom.',
- 'Historic synagogue serving the Jewish community since 1952'),
- 
+ 'Historic synagogue serving the Jewish community since 1952',
+ 'https://images.unsplash.com/photo-1549298240-0d8e60513026?w=400',
+ 'https://images.unsplash.com/photo-1549298240-0d8e60513026?w=800'),
+
 ('c0000000-0000-0000-0000-000000000002', 'St. Mary Cathedral', 'christianity', 'United States', 'active', 'st-mary-cathedral',
  'A historic cathedral serving the faithful with worship, community, and outreach.',
  'Pastor James Smith',
  'May the grace of our Lord Jesus Christ be with you today.',
- 'Gothic cathedral in the heart of downtown'),
- 
+ 'Gothic cathedral in the heart of downtown',
+ 'https://images.unsplash.com/photo-1548625149-fc4a29cf7092?w=400',
+ 'https://images.unsplash.com/photo-1548625149-fc4a29cf7092?w=800'),
+
 ('c0000000-0000-0000-0000-000000000003', 'Islamic Center of Peace', 'islam', 'United States', 'active', 'islamic-center-peace',
  'A center for Islamic learning, prayer, and community service.',
  'Imam Ahmad Hassan',
  'Assalamu Alaikum - Peace be upon you.',
- 'Serving the Muslim community with daily prayers and education'),
- 
+ 'Serving the Muslim community with daily prayers and education',
+ 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=400',
+ 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=800'),
+
 ('c0000000-0000-0000-0000-000000000004', 'Shri Krishna Temple', 'hinduism', 'United States', 'active', 'shri-krishna-temple',
  'A temple dedicated to Lord Krishna and the practice of Bhakti yoga.',
  'Pandit Sharma',
  'Om Namo Bhagavate Vasudevaya',
- 'Traditional Hindu temple with daily pujas and festivals');
+ 'Traditional Hindu temple with daily pujas and festivals',
+ 'https://images.unsplash.com/photo-1548625149-fc4a29cf7092?w=400',
+ 'https://images.unsplash.com/photo-1548625149-fc4a29cf7092?w=800'),
+
+('c0000000-0000-0000-0000-000000000005', 'Congregation Shalom', 'judaism', 'United States', 'active', 'congregation-shalom',
+ 'A vibrant Reform synagogue fostering spiritual growth, social justice, and lifelong Jewish learning.',
+ 'Cantor Rachel Levy',
+ 'May you find peace and purpose in your day. Shalom!',
+ 'Reform synagogue known for inclusive worship and community outreach',
+ 'https://images.unsplash.com/photo-1549298240-0d8e60513026?w=400',
+ 'https://images.unsplash.com/photo-1549298240-0d8e60513026?w=800');
 
 -- Community admins
 INSERT INTO community_admins (community_id, user_id, admin_name, admin_email, role_in_institution) VALUES
 ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'Rabbi David Cohen', 'rabbi@temple.com', 'Rabbi'),
 ('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000005', 'Pastor James Smith', 'pastor@stmary.com', 'Pastor'),
 ('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000006', 'Imam Ahmad Hassan', 'imam@islamic.com', 'Imam'),
-('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000007', 'Pandit Sharma', 'pandit@temple.com', 'Head Priest');
+('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000007', 'Pandit Sharma', 'pandit@temple.com', 'Head Priest'),
+('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000020', 'Cantor Rachel Levy', 'cantor@shalom.com', 'Cantor');
 
 -- Community admin memberships (auto-approved)
 INSERT INTO community_memberships (community_id, user_id, joined_via, status) VALUES
 ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'admin', 'approved'),
 ('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000005', 'admin', 'approved'),
 ('c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000006', 'admin', 'approved'),
-('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000007', 'admin', 'approved');
+('c0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000007', 'admin', 'approved'),
+('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000020', 'admin', 'approved');
 
 -- Community memberships (all devotees joined and approved for demo)
 INSERT INTO community_memberships (community_id, user_id, joined_via, status) VALUES
 -- Judaism
 ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'link', 'approved'),
 ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'qr', 'approved'),
--- Sarah also in Christianity
-('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000003', 'link', 'approved'),
+-- Sarah also in Congregation Shalom (2nd Judaism institute)
+('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000003', 'link', 'approved'),
+-- Congregation Shalom members
+('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000021', 'qr', 'approved'),
 -- Christianity
 ('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000010', 'link', 'approved'),
 ('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000011', 'qr', 'approved'),
@@ -442,8 +464,10 @@ INSERT INTO active_community_access (user_id, community_id, access_expires_at, c
 -- Judaism
 ('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '60 days', 0),
 ('a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP - INTERVAL '5 days', 0),
--- Sarah also in Christianity (access after April 1st)
-('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP + INTERVAL '50 days', 0),
+-- Sarah also in Congregation Shalom
+('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000005', CURRENT_TIMESTAMP + INTERVAL '55 days', 0),
+-- Congregation Shalom
+('a0000000-0000-0000-0000-000000000021', 'c0000000-0000-0000-0000-000000000005', CURRENT_TIMESTAMP + INTERVAL '40 days', 0),
 -- Christianity
 ('a0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP + INTERVAL '45 days', 0),
 ('a0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP - INTERVAL '3 days', 0),
@@ -459,6 +483,9 @@ INSERT INTO payments (id, user_id, community_id, amount, status, psp_transaction
 -- Judaism
 ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 10.00, 'completed', 'pi_demo_101', 60, 'card', 'Supporting the weekly Shabbat services', 2.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '5 days'),
 ('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', 5.00, 'completed', 'pi_demo_102', 30, 'card', NULL, 1.25, 25.00, CURRENT_TIMESTAMP - INTERVAL '15 days'),
+-- Congregation Shalom
+('b0000000-0000-0000-0000-000000000009', 'a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000005', 18.00, 'completed', 'pi_demo_103', 60, 'card', 'Supporting the community programs', 4.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '6 days'),
+('b0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000021', 'c0000000-0000-0000-0000-000000000005', 10.00, 'completed', 'pi_demo_104', 45, 'card', 'For the youth education fund', 2.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '9 days'),
 -- Christianity
 ('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000002', 15.00, 'completed', 'pi_demo_201', 60, 'card', 'For the Sunday school program', 3.75, 25.00, CURRENT_TIMESTAMP - INTERVAL '3 days'),
 ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', 20.00, 'completed', 'pi_demo_202', 90, 'card', 'God bless this community', 4.00, 20.00, CURRENT_TIMESTAMP - INTERVAL '10 days'),

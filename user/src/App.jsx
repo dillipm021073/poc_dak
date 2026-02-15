@@ -977,17 +977,50 @@ function CommunityPage() {
   const liveStream = streams.find(s => s.isLive)
 
   return (
-    <div className="community-page">
-      <div className="community-header-clean">
-        <div className="community-header-left">
-          <CommunitySymbol communityType={community.communityType} size={40} />
-          <div><h1>{community.name}</h1><p className="community-location">{community.location || community.city || 'Community'}</p></div>
+    <div className="community-page-layout">
+      {/* Left Sidebar - Community Context */}
+      <div className="community-left-sidebar">
+        {/* Community Info */}
+        <div className="sidebar-community-info">
+          {community.logoUrl ? (
+            <img src={community.logoUrl} alt={community.name} className="sidebar-community-logo" />
+          ) : (
+            <div className="sidebar-logo-placeholder">
+              <CommunitySymbol communityType={community.communityType} size={40} />
+            </div>
+          )}
+          <h2 className="sidebar-community-name">{community.name}</h2>
+          {community.headOfInstitution && (
+            <p className="sidebar-community-head">{community.headOfInstitution}</p>
+          )}
+          {community.shortDescription && (
+            <p className="sidebar-community-desc">{community.shortDescription}</p>
+          )}
         </div>
+
+        {/* Access Status */}
+        <div className="sidebar-access-status">
+          <AccessBadge community={community} />
+        </div>
+
+        {/* Cover Image - Below Access Info */}
+        {community.coverImageUrl && community.coverImageUrl.trim() !== '' && (
+          <div className="sidebar-cover-image-bottom">
+            <img src={community.coverImageUrl} alt={`${community.name} cover`} className="sidebar-cover-img" />
+          </div>
+        )}
       </div>
 
-      {community.membershipStatus === 'pending' && (
-        <div className="alert alert-warning" style={{ margin: '1rem 32px', textAlign: 'center' }}>Your membership is pending approval by the community administrator.</div>
-      )}
+      {/* Main Content Area */}
+      <div className="community-main-content">
+        <div className="community-header-minimal">
+          <h1>{community.name}</h1>
+          {community.membershipStatus === 'pending' && (
+            <div className="alert alert-warning" style={{ margin: '12px 0', textAlign: 'center' }}>
+              Your membership is pending approval by the community administrator.
+            </div>
+          )}
+        </div>
 
       <div className="tabs">
         <button className={activeTab === 'home' ? 'active' : ''} onClick={() => setActiveTab('home')}>Home</button>
@@ -1006,6 +1039,12 @@ function CommunityPage() {
               <SupportWidget community={community} communityId={id} onActivated={loadCommunity} />
             </div>
             <div className="overview-sidebar">
+              {community.aboutText && (
+                <div className="sidebar-card about-section">
+                  <h3>About</h3>
+                  <p className="about-text">{community.aboutText}</p>
+                </div>
+              )}
               <UpcomingEventsSidebar events={events} community={community} />
               <MiniCalendar events={events} community={community} />
               <RecentlyAddedSidebar streams={streams} />
@@ -1017,6 +1056,7 @@ function CommunityPage() {
         {activeTab === 'discussions' && <DiscussionsTab communityId={id} isViewOnly={community.isViewOnly} />}
         {activeTab === 'messages' && (community.isViewOnly ? <div className="view-only-message"><p>🔒 Activate Active Access to send messages</p></div> : <MessagesTab communityId={id} communityName={community.name} />)}
         {/* {activeTab === 'guide' && <SpiritualGuideTab communityId={id} community={community} />} */}
+      </div>
       </div>
     </div>
   )
