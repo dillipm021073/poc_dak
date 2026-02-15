@@ -478,17 +478,28 @@ router.get('/:id/analytics', authenticateToken, async (req, res) => {
     // Get monthly activity - calculate from payments table for current month
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const firstDayNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    console.log('Analytics query params:', {
+      communityId: id,
+      firstDayOfMonth: firstDayOfMonth.toISOString(),
+      firstDayNextMonth: firstDayNextMonth.toISOString()
+    });
+
     const monthlyPaymentsResult = await pool.query(
       `SELECT
          COALESCE(SUM(amount), 0) as total_collected,
-         COALESCE(SUM(platform_fee), 0) as platform_fee_total
+         COALESCE(SUM(platform_fee), 0) as platform_fee_total,
+         COUNT(*) as payment_count
        FROM payments
        WHERE community_id = $1
          AND status = 'completed'
          AND created_at >= $2
          AND created_at < $3`,
-      [id, firstDayOfMonth, new Date(now.getFullYear(), now.getMonth() + 1, 1)]
+      [id, firstDayOfMonth, firstDayNextMonth]
     );
+
+    console.log('Monthly payments result:', monthlyPaymentsResult.rows[0]);
 
     // Get recent analytics
     const analyticsResult = await pool.query(
