@@ -441,14 +441,13 @@ INSERT INTO community_memberships (community_id, user_id, joined_via, status) VA
 ('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000020', 'admin', 'approved');
 
 -- Community memberships (all devotees joined and approved for demo)
+-- RULE: Each user should belong to ONE and ONLY ONE community
 INSERT INTO community_memberships (community_id, user_id, joined_via, status) VALUES
 -- Judaism
-('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'link', 'approved'),
-('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'qr', 'approved'),
--- Sarah also in Congregation Shalom (2nd Judaism institute)
-('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000003', 'link', 'approved'),
+('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'link', 'approved'),  -- Sarah Miller - Temple Beth Israel
+('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'qr', 'approved'),    -- David Green - Temple Beth Israel
 -- Congregation Shalom members
-('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000021', 'qr', 'approved'),
+('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000021', 'qr', 'approved'),   -- Rachel Goldstein - Congregation Shalom
 -- Christianity
 ('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000010', 'link', 'approved'),
 ('c0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000011', 'qr', 'approved'),
@@ -461,14 +460,13 @@ INSERT INTO community_memberships (community_id, user_id, joined_via, status) VA
 
 -- Active Community Access for all demo users
 -- Note: credit_amount represents funds beyond the 90-day access cap
+-- RULE: Each user should have access to their ONE community only
 INSERT INTO active_community_access (user_id, community_id, access_expires_at, credit_amount) VALUES
 -- Judaism
-('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '60 days', 15.50),
-('a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP - INTERVAL '5 days', 0),
--- Sarah also in Congregation Shalom
-('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000005', CURRENT_TIMESTAMP + INTERVAL '55 days', 0),
+('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP + INTERVAL '60 days', 15.50),  -- Sarah Miller - Temple Beth Israel
+('a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', CURRENT_TIMESTAMP - INTERVAL '5 days', 0),      -- David Green - Temple Beth Israel
 -- Congregation Shalom
-('a0000000-0000-0000-0000-000000000021', 'c0000000-0000-0000-0000-000000000005', CURRENT_TIMESTAMP + INTERVAL '40 days', 8.25),
+('a0000000-0000-0000-0000-000000000021', 'c0000000-0000-0000-0000-000000000005', CURRENT_TIMESTAMP + INTERVAL '40 days', 8.25),  -- Rachel Goldstein - Congregation Shalom
 -- Christianity
 ('a0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP + INTERVAL '45 days', 0),
 ('a0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', CURRENT_TIMESTAMP - INTERVAL '3 days', 0),
@@ -482,11 +480,10 @@ INSERT INTO active_community_access (user_id, community_id, access_expires_at, c
 -- Sample payments (donations) for all communities
 INSERT INTO payments (id, user_id, community_id, amount, status, psp_transaction_id, days_granted, donation_method, comment, platform_fee, platform_fee_percent, created_at) VALUES
 -- Judaism
-('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 10.00, 'completed', 'pi_demo_101', 60, 'card', 'Supporting the weekly Shabbat services', 2.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '5 days'),
-('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', 5.00, 'completed', 'pi_demo_102', 30, 'card', NULL, 1.25, 25.00, CURRENT_TIMESTAMP - INTERVAL '15 days'),
+('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 10.00, 'completed', 'pi_demo_101', 60, 'card', 'Supporting the weekly Shabbat services', 2.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '5 days'),  -- Sarah Miller - Temple Beth Israel
+('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000001', 5.00, 'completed', 'pi_demo_102', 30, 'card', NULL, 1.25, 25.00, CURRENT_TIMESTAMP - INTERVAL '15 days'),                     -- David Green - Temple Beth Israel
 -- Congregation Shalom
-('b0000000-0000-0000-0000-000000000009', 'a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000005', 18.00, 'completed', 'pi_demo_103', 60, 'card', 'Supporting the community programs', 4.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '6 days'),
-('b0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000021', 'c0000000-0000-0000-0000-000000000005', 10.00, 'completed', 'pi_demo_104', 45, 'card', 'For the youth education fund', 2.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '9 days'),
+('b0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000021', 'c0000000-0000-0000-0000-000000000005', 10.00, 'completed', 'pi_demo_104', 45, 'card', 'For the youth education fund', 2.50, 25.00, CURRENT_TIMESTAMP - INTERVAL '9 days'),  -- Rachel Goldstein - Congregation Shalom
 -- Christianity
 ('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000002', 15.00, 'completed', 'pi_demo_201', 60, 'card', 'For the Sunday school program', 3.75, 25.00, CURRENT_TIMESTAMP - INTERVAL '3 days'),
 ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000002', 20.00, 'completed', 'pi_demo_202', 90, 'card', 'God bless this community', 4.00, 20.00, CURRENT_TIMESTAMP - INTERVAL '10 days'),

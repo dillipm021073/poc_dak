@@ -309,8 +309,19 @@ router.get('/users', authenticateToken, platformAdminOnly, async (req, res) => {
     let query = `
       SELECT
         u.id, u.email, u.name, u.role, u.community_type, u.created_at,
-        (SELECT COUNT(*) FROM community_memberships WHERE user_id = u.id) as community_count,
-        (SELECT COUNT(*) FROM active_community_access WHERE user_id = u.id AND access_expires_at > NOW()) as active_access_count
+        (SELECT c.name
+         FROM community_memberships cm
+         JOIN communities c ON c.id = cm.community_id
+         WHERE cm.user_id = u.id AND cm.status = 'approved'
+         ORDER BY cm.created_at DESC
+         LIMIT 1) as community_name,
+        (SELECT c.id
+         FROM community_memberships cm
+         JOIN communities c ON c.id = cm.community_id
+         WHERE cm.user_id = u.id AND cm.status = 'approved'
+         ORDER BY cm.created_at DESC
+         LIMIT 1) as community_id,
+        (SELECT COUNT(*) FROM community_memberships WHERE user_id = u.id AND status = 'approved') as membership_count
       FROM users u
     `;
 
@@ -352,14 +363,42 @@ router.get('/users', authenticateToken, platformAdminOnly, async (req, res) => {
 
     const result = await pool.query(query, params);
 
+    // Get active subscriptions for each user
+    const userIds = result.rows.map(u => u.id);
+    const subscriptionsQuery = `
+      SELECT
+        aca.user_id,
+        c.name as community_name,
+        aca.access_expires_at
+      FROM active_community_access aca
+      JOIN communities c ON c.id = aca.community_id
+      WHERE aca.user_id = ANY($1) AND aca.access_expires_at > NOW()
+      ORDER BY aca.access_expires_at DESC
+    `;
+    const subscriptionsResult = await pool.query(subscriptionsQuery, [userIds]);
+
+    // Group subscriptions by user_id
+    const subscriptionsByUser = {};
+    subscriptionsResult.rows.forEach(sub => {
+      if (!subscriptionsByUser[sub.user_id]) {
+        subscriptionsByUser[sub.user_id] = [];
+      }
+      subscriptionsByUser[sub.user_id].push({
+        communityName: sub.community_name,
+        expiresAt: sub.access_expires_at
+      });
+    });
+
     res.json(result.rows.map(user => ({
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
       communityType: user.community_type,
-      communityCount: parseInt(user.community_count),
-      activeAccessCount: parseInt(user.active_access_count),
+      communityName: user.community_name,
+      communityId: user.community_id,
+      membershipCount: parseInt(user.membership_count),
+      activeSubscriptions: subscriptionsByUser[user.id] || [],
       createdAt: user.created_at
     })));
   } catch (err) {

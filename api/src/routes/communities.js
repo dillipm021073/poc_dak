@@ -705,4 +705,253 @@ router.post('/:id/members/:userId/set-access', authenticateToken, async (req, re
   }
 });
 
+// ============================================================================
+// WAITING LIST ENDPOINTS (Community Admin)
+// ============================================================================
+
+// Get waiting list entries for this community (community admin only)
+router.get('/:id/waiting-list', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const pool = req.app.locals.pool;
+
+  try {
+    // Verify user is admin of this community
+    const adminCheck = await pool.query(
+      `SELECT id FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [id, req.user.userId]
+    );
+
+    if (adminCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Only community administrators can access the waiting list' });
+    }
+
+    // Get community name for matching
+    const communityResult = await pool.query(
+      `SELECT name, community_type FROM communities WHERE id = $1`,
+      [id]
+    );
+
+    if (communityResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Community not found' });
+    }
+
+    const community = communityResult.rows[0];
+
+    // Get waiting list entries that match this community
+    // Match by: same community_type AND recommended_institution contains community name
+    const waitingListResult = await pool.query(
+      `SELECT id, email, recommended_institution, community_type, status, created_at
+       FROM waiting_list
+       WHERE community_type = $1
+         AND status = 'pending'
+         AND (
+           LOWER(recommended_institution) LIKE LOWER($2)
+           OR LOWER($3) LIKE LOWER('%' || recommended_institution || '%')
+         )
+       ORDER BY created_at ASC`,
+      [community.community_type, `%${community.name}%`, community.name]
+    );
+
+    res.json(waitingListResult.rows.map(entry => ({
+      id: entry.id,
+      email: entry.email,
+      recommendedInstitution: entry.recommended_institution,
+      communityType: entry.community_type,
+      status: entry.status,
+      createdAt: entry.created_at
+    })));
+  } catch (err) {
+    console.error('Get community waiting list error:', err);
+    res.status(500).json({ error: 'Failed to get waiting list' });
+  }
+});
+
+// Approve waiting list entry (community admin only) - creates user and adds to community
+router.post('/:id/waiting-list/:waitingListId/approve', authenticateToken, async (req, res) => {
+  const { id: communityId, waitingListId } = req.params;
+  const pool = req.app.locals.pool;
+  const { sendMail } = require('../utils/email');
+  const bcrypt = require('bcryptjs');
+  const crypto = require('crypto');
+
+  try {
+    // Verify user is admin of this community
+    const adminCheck = await pool.query(
+      `SELECT ca.admin_name, u.name as admin_user_name
+       FROM community_admins ca
+       LEFT JOIN users u ON u.id = ca.user_id
+       WHERE ca.community_id = $1 AND ca.user_id = $2`,
+      [communityId, req.user.userId]
+    );
+
+    if (adminCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Only community administrators can approve waiting list entries' });
+    }
+
+    const adminName = adminCheck.rows[0].admin_user_name || adminCheck.rows[0].admin_name;
+
+    // Get waiting list entry
+    const waitingListResult = await pool.query(
+      `SELECT email, recommended_institution, community_type, status
+       FROM waiting_list
+       WHERE id = $1`,
+      [waitingListId]
+    );
+
+    if (waitingListResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Waiting list entry not found' });
+    }
+
+    const entry = waitingListResult.rows[0];
+
+    if (entry.status !== 'pending') {
+      return res.status(400).json({ error: 'This entry has already been processed' });
+    }
+
+    // Get community details
+    const communityResult = await pool.query(
+      `SELECT name, community_type, invite_link FROM communities WHERE id = $1`,
+      [communityId]
+    );
+
+    if (communityResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Community not found' });
+    }
+
+    const community = communityResult.rows[0];
+
+    // Verify community type matches
+    if (entry.community_type !== community.community_type) {
+      return res.status(400).json({
+        error: 'Community type mismatch. This entry is for a different religious network.'
+      });
+    }
+
+    // Check if user already exists
+    const existingUserResult = await pool.query(
+      `SELECT id, role, community_type FROM users WHERE email = $1`,
+      [entry.email]
+    );
+
+    if (existingUserResult.rows.length > 0) {
+      return res.status(400).json({
+        error: 'This email is already registered. They can login directly and join your community via the invite link.'
+      });
+    }
+
+    // Generate secure random password (12 characters, base64url-safe)
+    const tempPassword = crypto.randomBytes(9).toString('base64url');
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // Create user account
+    const userResult = await pool.query(
+      `INSERT INTO users (email, password_hash, name, role, community_type)
+       VALUES ($1, $2, $3, 'user', $4)
+       RETURNING id, email, name`,
+      [entry.email, hashedPassword, entry.email.split('@')[0], entry.community_type]
+    );
+
+    const newUser = userResult.rows[0];
+
+    // Create community membership (auto-approved)
+    await pool.query(
+      `INSERT INTO community_memberships (community_id, user_id, joined_via, status)
+       VALUES ($1, $2, 'waiting_list', 'approved')`,
+      [communityId, newUser.id]
+    );
+
+    // Mark waiting list entry as approved
+    await pool.query(
+      `UPDATE waiting_list SET status = 'approved' WHERE id = $1`,
+      [waitingListId]
+    );
+
+    // Create notification for new user
+    await pool.query(
+      `INSERT INTO notifications (user_id, community_id, type, title, message)
+       VALUES ($1, $2, 'welcome', $3, $4)`,
+      [newUser.id, communityId, `Welcome to ${community.name}!`, `Your request to join has been approved. Please check your email for login credentials.`]
+    );
+
+    // Send welcome email with credentials
+    const loginUrl = process.env.DEVOTEE_APP_URL || 'http://localhost:3003';
+
+    try {
+      await sendMail({
+        to: entry.email,
+        subject: `Welcome to ${community.name} - Your Account Details`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #10b981; padding: 20px; border-radius: 8px 8px 0 0;">
+              <h2 style="margin: 0; color: white; font-size: 24px;">Welcome to ${community.name}!</h2>
+            </div>
+
+            <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0 0 20px; color: #111827; font-size: 16px;">
+                Your request to join <strong>${community.name}</strong> has been approved${adminName ? ` by ${adminName}` : ''}.
+              </p>
+
+              <div style="background: white; padding: 20px; border-radius: 8px; border: 2px solid #10b981; margin: 20px 0;">
+                <h3 style="margin: 0 0 16px; color: #111827;">Your Login Credentials</h3>
+                <p style="margin: 8px 0; color: #6b7280; font-size: 14px;">
+                  <strong>Email:</strong> ${entry.email}
+                </p>
+                <p style="margin: 8px 0; color: #6b7280; font-size: 14px;">
+                  <strong>Temporary Password:</strong><br/>
+                  <code style="background: #f3f4f6; padding: 8px 12px; border-radius: 4px; font-size: 16px; color: #111827; display: inline-block; margin-top: 4px;">${tempPassword}</code>
+                </p>
+              </div>
+
+              <div style="margin: 24px 0; text-align: center;">
+                <a href="${loginUrl}" style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                  Login to Your Account
+                </a>
+              </div>
+
+              <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 4px; margin: 20px 0;">
+                <p style="margin: 0; color: #78350f; font-size: 14px;">
+                  <strong>Important:</strong> For security, please change your password after logging in for the first time.
+                </p>
+              </div>
+
+              <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">
+                If you have any questions, please contact the community administrator.
+              </p>
+            </div>
+
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin-top: 20px;">
+              This is an automated message from D.A.K Platform
+            </p>
+          </div>
+        `
+      });
+    } catch (emailError) {
+      // Log error but don't fail the approval
+      console.error('Failed to send welcome email:', emailError);
+
+      // Create fallback notification
+      await pool.query(
+        `INSERT INTO notifications (user_id, community_id, type, title, message)
+         VALUES ($1, $2, 'system', 'Account Created - Email Delivery Failed', $3)`,
+        [newUser.id, communityId, `Your account has been created but we couldn't send your password via email. Please contact the community administrator for assistance. Email: ${entry.email}`]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Approved ${entry.email} and created their account. They will receive an email with login instructions.`,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name
+      }
+    });
+  } catch (err) {
+    console.error('Approve waiting list entry error:', err);
+    res.status(500).json({ error: 'Failed to approve waiting list entry' });
+  }
+});
+
 module.exports = router;

@@ -58,7 +58,9 @@ export const communities = {
   rejectMember: (communityId, userId) => api(`/communities/${communityId}/members/${userId}/reject`, { method: 'POST' }),
   setMemberAccess: (communityId, userId, data) => api(`/communities/${communityId}/members/${userId}/set-access`, { method: 'POST', body: JSON.stringify(data) }),
   getAnalytics: (id) => api(`/communities/${id}/analytics`),
-  create: (data) => api('/communities', { method: 'POST', body: JSON.stringify(data) })
+  create: (data) => api('/communities', { method: 'POST', body: JSON.stringify(data) }),
+  getWaitingList: (id) => api(`/communities/${id}/waiting-list`),
+  approveWaitingListEntry: (communityId, waitingListId) => api(`/communities/${communityId}/waiting-list/${waitingListId}/approve`, { method: 'POST' })
 };
 
 // Events

@@ -142,6 +142,7 @@ function App() {
         {activeTab === 'messages' && <MessagesTab community={community} />}
         {activeTab === 'supports' && <SupportsTab community={community} />}
         {activeTab === 'members' && <MembersTab community={community} />}
+        {activeTab === 'waiting-list' && <WaitingListTab community={community} />}
       </main>
     </div>
   )
@@ -614,7 +615,8 @@ function Sidebar({ community, activeTab, onTabChange, onLogout }) {
     { id: 'streams', icon: '📺', label: 'Streams' },
     { id: 'messages', icon: '💬', label: 'Messages' },
     { id: 'supports', icon: '💰', label: 'Supports' },
-    { id: 'members', icon: '👥', label: 'Members' }
+    { id: 'members', icon: '👥', label: 'Members' },
+    { id: 'waiting-list', icon: '📋', label: 'Waiting List' }
   ]
 
   return (
@@ -873,6 +875,14 @@ function EventsTab({ community }) {
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [appliedFilters, setAppliedFilters] = useState({
+    searchQuery: '',
+    dateFrom: '',
+    dateTo: ''
+  })
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -923,6 +933,58 @@ function EventsTab({ community }) {
 
   if (loading) return <div className="loading">Loading events...</div>
 
+  const applyFilters = () => {
+    setAppliedFilters({
+      searchQuery,
+      dateFrom,
+      dateTo
+    })
+  }
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setDateFrom('')
+    setDateTo('')
+    setAppliedFilters({
+      searchQuery: '',
+      dateFrom: '',
+      dateTo: ''
+    })
+  }
+
+  // Calculate 6 months ago date
+  const sixMonthsAgo = new Date()
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+
+  const filteredEvents = events.filter(event => {
+    const eventDate = new Date(event.startsAt)
+
+    // Only show events from last 6 months or upcoming
+    if (eventDate < sixMonthsAgo) return false
+
+    // Search by title, description, or location
+    if (appliedFilters.searchQuery.trim()) {
+      const query = appliedFilters.searchQuery.toLowerCase()
+      if (!(event.title?.toLowerCase().includes(query) ||
+            event.description?.toLowerCase().includes(query) ||
+            event.location?.toLowerCase().includes(query))) {
+        return false
+      }
+    }
+
+    // Filter by date range
+    if (appliedFilters.dateFrom) {
+      if (eventDate < new Date(appliedFilters.dateFrom)) return false
+    }
+    if (appliedFilters.dateTo) {
+      const end = new Date(appliedFilters.dateTo)
+      end.setHours(23, 59, 59, 999)
+      if (eventDate > end) return false
+    }
+
+    return true
+  })
+
   return (
     <div className="events-tab">
       <div className="page-header">
@@ -933,6 +995,36 @@ function EventsTab({ community }) {
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : '+ New Event'}
         </button>
+      </div>
+
+      <div className="search-bar">
+        <input
+          type="text"
+          placeholder="Search events by title, description, or location..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+          className="search-input"
+          style={{
+            width: '100%',
+            padding: '10px 16px',
+            fontSize: '14px',
+            border: '1px solid var(--gray-300, #d1d5db)',
+            borderRadius: '8px',
+            marginBottom: '0.5rem'
+          }}
+        />
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
+          <label style={{ fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap' }}>Date Range:</label>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+          <span style={{ fontSize: '13px', color: '#6b7280' }}>to</span>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+          <button className="btn btn-sm btn-primary" onClick={applyFilters}>Apply</button>
+          {(appliedFilters.searchQuery || appliedFilters.dateFrom || appliedFilters.dateTo) && (
+            <button className="btn btn-sm btn-outline" onClick={clearFilters}>Clear</button>
+          )}
+          <span style={{ fontSize: '12px', color: '#9ca3af', fontStyle: 'italic', marginLeft: 'auto' }}>(Showing events from last 6 months and upcoming)</span>
+        </div>
       </div>
 
       {showForm && (
@@ -1005,14 +1097,14 @@ function EventsTab({ community }) {
         </form>
       )}
 
-      {events.length === 0 ? (
+      {filteredEvents.length === 0 ? (
         <div className="empty-state">
-          <p>No upcoming events</p>
-          <p className="text-secondary">Create events for your community members</p>
+          <p>{events.length === 0 ? 'No upcoming events' : 'No events match your search'}</p>
+          <p className="text-secondary">{events.length === 0 ? 'Create events for your community members' : 'Try a different search term'}</p>
         </div>
       ) : (
         <div className="events-list">
-          {events.map(event => (
+          {filteredEvents.map(event => (
             <div key={event.id} className="event-card card">
               <div className="event-date">
                 <span className="month">{new Date(event.startsAt).toLocaleDateString('en', { month: 'short' })}</span>
@@ -1046,6 +1138,8 @@ function StreamsTab({ community }) {
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('')
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -1105,6 +1199,24 @@ function StreamsTab({ community }) {
 
   if (loading) return <div className="loading">Loading streams...</div>
 
+  const applySearch = () => {
+    setAppliedSearchQuery(searchQuery)
+  }
+
+  const clearSearch = () => {
+    setSearchQuery('')
+    setAppliedSearchQuery('')
+  }
+
+  const filteredStreams = streams.filter(stream => {
+    if (!appliedSearchQuery.trim()) return true
+    const query = appliedSearchQuery.toLowerCase()
+    return (
+      stream.title?.toLowerCase().includes(query) ||
+      stream.description?.toLowerCase().includes(query)
+    )
+  })
+
   return (
     <div className="streams-tab">
       <div className="page-header">
@@ -1117,6 +1229,30 @@ function StreamsTab({ community }) {
             {showForm ? 'Cancel' : '+ New Stream'}
           </button>
         )}
+      </div>
+
+      <div className="search-bar">
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+          <input
+            type="text"
+            placeholder="Search streams by title or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && applySearch()}
+            className="search-input"
+            style={{
+              flex: 1,
+              padding: '10px 16px',
+              fontSize: '14px',
+              border: '1px solid var(--gray-300, #d1d5db)',
+              borderRadius: '8px'
+            }}
+          />
+          <button className="btn btn-sm btn-primary" onClick={applySearch}>Apply</button>
+          {appliedSearchQuery && (
+            <button className="btn btn-sm btn-outline" onClick={clearSearch}>Clear</button>
+          )}
+        </div>
       </div>
 
       {status && (
@@ -1172,8 +1308,15 @@ function StreamsTab({ community }) {
         </form>
       )}
 
+      {filteredStreams.length === 0 && streams.length > 0 && (
+        <div className="empty-state">
+          <p>No streams match your search</p>
+          <p className="text-secondary">Try a different search term</p>
+        </div>
+      )}
+
       <div className="streams-list">
-        {streams.map(stream => (
+        {filteredStreams.map(stream => (
           <div key={stream.id} className={`stream-card card ${stream.isLive ? 'live' : ''}`}>
             <div className="stream-info">
               {stream.isLive && <span className="live-badge">🔴 LIVE</span>}
@@ -1212,6 +1355,14 @@ function MessagesTab({ community }) {
   const [selectedThread, setSelectedThread] = useState(null)
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [appliedFilters, setAppliedFilters] = useState({
+    searchQuery: '',
+    dateFrom: '',
+    dateTo: ''
+  })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -1264,6 +1415,48 @@ function MessagesTab({ community }) {
 
   if (loading) return <div className="loading">Loading messages...</div>
 
+  const applyFilters = () => {
+    setAppliedFilters({
+      searchQuery,
+      dateFrom,
+      dateTo
+    })
+  }
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setDateFrom('')
+    setDateTo('')
+    setAppliedFilters({
+      searchQuery: '',
+      dateFrom: '',
+      dateTo: ''
+    })
+  }
+
+  const filteredThreads = threads.filter(thread => {
+    // Search by username or last message content
+    if (appliedFilters.searchQuery.trim()) {
+      const query = appliedFilters.searchQuery.toLowerCase()
+      if (!(thread.userName?.toLowerCase().includes(query) || thread.lastMessage?.toLowerCase().includes(query))) {
+        return false
+      }
+    }
+
+    // Filter by date range (using thread's last activity or creation date)
+    const threadDate = thread.lastMessageAt || thread.createdAt
+    if (appliedFilters.dateFrom && threadDate) {
+      if (new Date(threadDate) < new Date(appliedFilters.dateFrom)) return false
+    }
+    if (appliedFilters.dateTo && threadDate) {
+      const end = new Date(appliedFilters.dateTo)
+      end.setHours(23, 59, 59, 999)
+      if (new Date(threadDate) > end) return false
+    }
+
+    return true
+  })
+
   return (
     <div className="messages-tab">
       <div className="page-header">
@@ -1271,12 +1464,41 @@ function MessagesTab({ community }) {
         <p>Conversations with your community members</p>
       </div>
 
+      <div className="search-bar" style={{ marginBottom: '1rem' }}>
+        <input
+          type="text"
+          placeholder="Search by user name or conversation content..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+          className="search-input"
+          style={{
+            width: '100%',
+            padding: '10px 16px',
+            fontSize: '14px',
+            border: '1px solid var(--gray-300, #d1d5db)',
+            borderRadius: '8px',
+            marginBottom: '0.5rem'
+          }}
+        />
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap' }}>Date Range:</label>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+          <span style={{ fontSize: '13px', color: '#6b7280' }}>to</span>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+          <button className="btn btn-sm btn-primary" onClick={applyFilters}>Apply</button>
+          {(appliedFilters.searchQuery || appliedFilters.dateFrom || appliedFilters.dateTo) && (
+            <button className="btn btn-sm btn-outline" onClick={clearFilters}>Clear</button>
+          )}
+        </div>
+      </div>
+
       <div className="messages-layout">
         <div className="threads-panel">
-          {threads.length === 0 ? (
-            <div className="empty-state">No messages yet</div>
+          {filteredThreads.length === 0 ? (
+            <div className="empty-state">{threads.length === 0 ? 'No messages yet' : 'No messages match your search'}</div>
           ) : (
-            threads.map(thread => (
+            filteredThreads.map(thread => (
               <div 
                 key={thread.id}
                 className={`thread-item ${selectedThread?.id === thread.id ? 'active' : ''} ${thread.unreadCount > 0 ? 'unread' : ''}`}
@@ -1351,6 +1573,19 @@ function SupportsTab({ community }) {
   const [nameFilter, setNameFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [typeFilter, setTypeFilter] = useState('One-Time')
+  const [minAmount, setMinAmount] = useState('')
+  const [maxAmount, setMaxAmount] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [appliedFilters, setAppliedFilters] = useState({
+    nameFilter: '',
+    dateFrom: '',
+    dateTo: '',
+    typeFilter: 'One-Time',
+    minAmount: '',
+    maxAmount: '',
+    statusFilter: ''
+  })
   const [ackSupportId, setAckSupportId] = useState(null)
   const [ackMessage, setAckMessage] = useState('')
   const [ackLoading, setAckLoading] = useState(false)
@@ -1384,19 +1619,68 @@ function SupportsTab({ community }) {
     setAckLoading(false)
   }
 
+  const applyFilters = () => {
+    setAppliedFilters({
+      nameFilter,
+      dateFrom,
+      dateTo,
+      typeFilter,
+      minAmount,
+      maxAmount,
+      statusFilter
+    })
+  }
+
+  const clearFilters = () => {
+    setNameFilter('')
+    setDateFrom('')
+    setDateTo('')
+    setTypeFilter('One-Time')
+    setMinAmount('')
+    setMaxAmount('')
+    setStatusFilter('')
+    setAppliedFilters({
+      nameFilter: '',
+      dateFrom: '',
+      dateTo: '',
+      typeFilter: 'One-Time',
+      minAmount: '',
+      maxAmount: '',
+      statusFilter: ''
+    })
+  }
+
   const filteredDonations = donations.filter(d => {
-    if (nameFilter) {
-      const q = nameFilter.toLowerCase()
+    // Filter by name or email
+    if (appliedFilters.nameFilter) {
+      const q = appliedFilters.nameFilter.toLowerCase()
       if (!(d.donor_name || '').toLowerCase().includes(q) && !(d.donor_email || '').toLowerCase().includes(q)) return false
     }
-    if (dateFrom) {
-      if (new Date(d.created_at) < new Date(dateFrom)) return false
+
+    // Filter by date range
+    if (appliedFilters.dateFrom) {
+      if (new Date(d.created_at) < new Date(appliedFilters.dateFrom)) return false
     }
-    if (dateTo) {
-      const end = new Date(dateTo)
+    if (appliedFilters.dateTo) {
+      const end = new Date(appliedFilters.dateTo)
       end.setHours(23, 59, 59, 999)
       if (new Date(d.created_at) > end) return false
     }
+
+    // Filter by type (One-Time or Recurring)
+    if (appliedFilters.typeFilter && appliedFilters.typeFilter !== 'All') {
+      const supportType = d.support_type === 'recurring' ? 'Recurring' : 'One-Time'
+      if (supportType !== appliedFilters.typeFilter) return false
+    }
+
+    // Filter by amount range
+    const amount = parseFloat(d.amount) || 0
+    if (appliedFilters.minAmount && amount < parseFloat(appliedFilters.minAmount)) return false
+    if (appliedFilters.maxAmount && amount > parseFloat(appliedFilters.maxAmount)) return false
+
+    // Filter by status
+    if (appliedFilters.statusFilter && d.status !== appliedFilters.statusFilter) return false
+
     return true
   })
 
@@ -1458,29 +1742,49 @@ function SupportsTab({ community }) {
         </div>
       )}
 
-      <div className="supports-filters">
+      <div className="supports-filters" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
         <input
           type="text"
           placeholder="Search by name or email..."
           value={nameFilter}
           onChange={(e) => setNameFilter(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
           className="filter-input"
+          style={{ width: '100%', padding: '10px 16px', fontSize: '14px', border: '1px solid #d1d5db', borderRadius: '8px' }}
         />
-        <div className="filter-date-group">
-          <label>From</label>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }}>
+            <option value="All">All Types</option>
+            <option value="One-Time">One-Time</option>
+            <option value="Recurring">Recurring</option>
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }}>
+            <option value="">All Status</option>
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap' }}>Amount:</label>
+            <input type="number" placeholder="Min $" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} step="0.01" min="0" style={{ width: '80px', padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+            <span style={{ fontSize: '13px', color: '#6b7280' }}>-</span>
+            <input type="number" placeholder="Max $" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} step="0.01" min="0" style={{ width: '80px', padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap' }}>Date:</label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+            <span style={{ fontSize: '13px', color: '#6b7280' }}>to</span>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+          </div>
+          <button className="btn btn-sm btn-primary" onClick={applyFilters}>Apply</button>
+          {(appliedFilters.nameFilter || appliedFilters.dateFrom || appliedFilters.dateTo || appliedFilters.typeFilter !== 'One-Time' || appliedFilters.minAmount || appliedFilters.maxAmount || appliedFilters.statusFilter) && (
+            <button className="btn btn-sm btn-outline" onClick={clearFilters}>Clear</button>
+          )}
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-sm btn-primary" onClick={exportCsv} disabled={filteredDonations.length === 0}>
+            Export CSV ({filteredDonations.length})
+          </button>
         </div>
-        <div className="filter-date-group">
-          <label>To</label>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-        </div>
-        {(nameFilter || dateFrom || dateTo) && (
-          <button className="btn btn-sm btn-outline" onClick={() => { setNameFilter(''); setDateFrom(''); setDateTo('') }}>Clear</button>
-        )}
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-sm btn-primary" onClick={exportCsv} disabled={filteredDonations.length === 0}>
-          Export CSV ({filteredDonations.length})
-        </button>
       </div>
 
       {filteredDonations.length === 0 ? (
@@ -1575,6 +1879,24 @@ function SupportsTab({ community }) {
 function MembersTab({ community }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [joinDateFrom, setJoinDateFrom] = useState('')
+  const [joinDateTo, setJoinDateTo] = useState('')
+  const [accessDateFrom, setAccessDateFrom] = useState('')
+  const [accessDateTo, setAccessDateTo] = useState('')
+  const [minCredit, setMinCredit] = useState('')
+  const [maxCredit, setMaxCredit] = useState('')
+  const [joinedViaFilter, setJoinedViaFilter] = useState('')
+  const [appliedFilters, setAppliedFilters] = useState({
+    searchQuery: '',
+    joinDateFrom: '',
+    joinDateTo: '',
+    accessDateFrom: '',
+    accessDateTo: '',
+    minCredit: '',
+    maxCredit: '',
+    joinedViaFilter: ''
+  })
   const [editingAccessForUser, setEditingAccessForUser] = useState(null)
   const [accessDate, setAccessDate] = useState('')
   const [accessLoading, setAccessLoading] = useState(false)
@@ -1676,8 +1998,82 @@ function MembersTab({ community }) {
     link.click()
   }
 
-  const pendingMembers = members.filter(m => m.membershipStatus === 'pending')
-  const approvedMembers = members.filter(m => m.membershipStatus === 'approved' || (!m.membershipStatus && m.membershipStatus !== 'rejected'))
+  const applyFilters = () => {
+    setAppliedFilters({
+      searchQuery,
+      joinDateFrom,
+      joinDateTo,
+      accessDateFrom,
+      accessDateTo,
+      minCredit,
+      maxCredit,
+      joinedViaFilter
+    })
+  }
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setJoinDateFrom('')
+    setJoinDateTo('')
+    setAccessDateFrom('')
+    setAccessDateTo('')
+    setMinCredit('')
+    setMaxCredit('')
+    setJoinedViaFilter('')
+    setAppliedFilters({
+      searchQuery: '',
+      joinDateFrom: '',
+      joinDateTo: '',
+      accessDateFrom: '',
+      accessDateTo: '',
+      minCredit: '',
+      maxCredit: '',
+      joinedViaFilter: ''
+    })
+  }
+
+  const filteredMembers = members.filter(member => {
+    // Search by name or email
+    if (appliedFilters.searchQuery.trim()) {
+      const query = appliedFilters.searchQuery.toLowerCase()
+      if (!(member.name?.toLowerCase().includes(query) || member.email?.toLowerCase().includes(query))) {
+        return false
+      }
+    }
+
+    // Filter by join date range
+    if (appliedFilters.joinDateFrom && member.joinedAt) {
+      if (new Date(member.joinedAt) < new Date(appliedFilters.joinDateFrom)) return false
+    }
+    if (appliedFilters.joinDateTo && member.joinedAt) {
+      const end = new Date(appliedFilters.joinDateTo)
+      end.setHours(23, 59, 59, 999)
+      if (new Date(member.joinedAt) > end) return false
+    }
+
+    // Filter by access date range
+    if (appliedFilters.accessDateFrom && member.accessExpiresAt) {
+      if (new Date(member.accessExpiresAt) < new Date(appliedFilters.accessDateFrom)) return false
+    }
+    if (appliedFilters.accessDateTo && member.accessExpiresAt) {
+      const end = new Date(appliedFilters.accessDateTo)
+      end.setHours(23, 59, 59, 999)
+      if (new Date(member.accessExpiresAt) > end) return false
+    }
+
+    // Filter by credit amount range
+    const creditAmount = member.creditAmount || 0
+    if (appliedFilters.minCredit && creditAmount < parseFloat(appliedFilters.minCredit)) return false
+    if (appliedFilters.maxCredit && creditAmount > parseFloat(appliedFilters.maxCredit)) return false
+
+    // Filter by joined via
+    if (appliedFilters.joinedViaFilter && member.joinedVia !== appliedFilters.joinedViaFilter) return false
+
+    return true
+  })
+
+  const pendingMembers = filteredMembers.filter(m => m.membershipStatus === 'pending')
+  const approvedMembers = filteredMembers.filter(m => m.membershipStatus === 'approved' || (!m.membershipStatus && m.membershipStatus !== 'rejected'))
   const activeCount = approvedMembers.filter(m => m.hasActiveAccess).length
 
   if (loading) return <div className="loading">Loading members...</div>
@@ -1697,6 +2093,57 @@ function MembersTab({ community }) {
           </svg>
           Export CSV
         </button>
+      </div>
+
+      <div className="search-bar" style={{ marginBottom: '1rem' }}>
+        <input
+          type="text"
+          placeholder="Search members by name or email..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+          className="search-input"
+          style={{
+            width: '100%',
+            padding: '10px 16px',
+            fontSize: '14px',
+            border: '1px solid var(--gray-300, #d1d5db)',
+            borderRadius: '8px',
+            marginBottom: '0.5rem'
+          }}
+        />
+        <div className="advanced-filters" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap' }}>Join Date:</label>
+            <input type="date" value={joinDateFrom} onChange={(e) => setJoinDateFrom(e.target.value)} className="filter-date" style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+            <span style={{ fontSize: '13px', color: '#6b7280' }}>to</span>
+            <input type="date" value={joinDateTo} onChange={(e) => setJoinDateTo(e.target.value)} className="filter-date" style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap' }}>Access Expires:</label>
+            <input type="date" value={accessDateFrom} onChange={(e) => setAccessDateFrom(e.target.value)} className="filter-date" style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+            <span style={{ fontSize: '13px', color: '#6b7280' }}>to</span>
+            <input type="date" value={accessDateTo} onChange={(e) => setAccessDateTo(e.target.value)} className="filter-date" style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '13px', color: '#6b7280', whiteSpace: 'nowrap' }}>Credit:</label>
+            <input type="number" placeholder="Min $" value={minCredit} onChange={(e) => setMinCredit(e.target.value)} step="0.01" min="0" style={{ width: '80px', padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+            <span style={{ fontSize: '13px', color: '#6b7280' }}>-</span>
+            <input type="number" placeholder="Max $" value={maxCredit} onChange={(e) => setMaxCredit(e.target.value)} step="0.01" min="0" style={{ width: '80px', padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
+          </div>
+          <select value={joinedViaFilter} onChange={(e) => setJoinedViaFilter(e.target.value)} style={{ padding: '6px 8px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px' }}>
+            <option value="">All Sources</option>
+            <option value="qr">QR Code</option>
+            <option value="link">Invite Link</option>
+            <option value="admin">Admin Added</option>
+          </select>
+          <button className="btn btn-sm btn-primary" onClick={applyFilters}>Apply</button>
+          {(appliedFilters.searchQuery || appliedFilters.joinDateFrom || appliedFilters.joinDateTo || appliedFilters.accessDateFrom || appliedFilters.accessDateTo || appliedFilters.minCredit || appliedFilters.maxCredit || appliedFilters.joinedViaFilter) && (
+            <button className="btn btn-sm btn-outline" onClick={clearFilters}>
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="stats-summary">
@@ -1858,6 +2305,150 @@ function MembersTab({ community }) {
             </table>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// WAITING LIST TAB
+// ============================================================================
+
+function WaitingListTab({ community }) {
+  const [waitingList, setWaitingList] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    loadWaitingList()
+  }, [community.id])
+
+  const loadWaitingList = async () => {
+    try {
+      const data = await api.communities.getWaitingList(community.id)
+      setWaitingList(data)
+    } catch (err) {
+      console.error('Failed to load waiting list:', err)
+    }
+    setLoading(false)
+  }
+
+  const handleApprove = async (waitingListId, email) => {
+    if (!confirm(`Approve ${email} and create their account?\n\nThey will receive an email with login credentials.`)) {
+      return
+    }
+
+    try {
+      await api.communities.approveWaitingListEntry(community.id, waitingListId)
+      alert(`Successfully approved ${email}! They will receive an email with their login credentials.`)
+      loadWaitingList()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  if (loading) return <div className="loading">Loading waiting list...</div>
+
+  const filteredEntries = waitingList.filter(entry => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.toLowerCase()
+    return entry.email?.toLowerCase().includes(query) ||
+           entry.recommendedInstitution?.toLowerCase().includes(query)
+  })
+
+  return (
+    <div className="waiting-list-tab">
+      <div className="page-header">
+        <div>
+          <h1>Waiting List</h1>
+          <p>Review and approve requests to join your community</p>
+        </div>
+      </div>
+
+      <div className="filters-section">
+        <div className="search-bar">
+          <input
+            type="text"
+            placeholder="Search by email or institution..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="stats-grid" style={{ marginBottom: '2rem' }}>
+        <div className="stat-card">
+          <span className="stat-icon">📋</span>
+          <div className="stat-content">
+            <span className="stat-value">{waitingList.length}</span>
+            <span className="stat-label">Pending Requests</span>
+          </div>
+        </div>
+      </div>
+
+      {filteredEntries.length === 0 ? (
+        <div className="empty-state">
+          <p>{waitingList.length === 0 ? 'No pending requests' : 'No requests match your search'}</p>
+          <p className="text-secondary">
+            {waitingList.length === 0
+              ? 'Devotees who join the waiting list and mention your community will appear here'
+              : 'Try a different search term'}
+          </p>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Mentioned Institution</th>
+                  <th>Community Type</th>
+                  <th>Requested</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEntries.map(entry => (
+                  <tr key={entry.id}>
+                    <td>
+                      <strong>{entry.email}</strong>
+                    </td>
+                    <td>{entry.recommendedInstitution || '-'}</td>
+                    <td>
+                      <span className="badge">
+                        {entry.communityType}
+                      </span>
+                    </td>
+                    <td>{new Date(entry.createdAt).toLocaleDateString()}</td>
+                    <td>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => handleApprove(entry.id, entry.email)}
+                      >
+                        Approve & Send Invite
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="info-section" style={{ marginTop: '2rem' }}>
+        <h3>About the Waiting List</h3>
+        <p className="text-secondary">
+          When people join the waiting list and mention "{community.name}" or a similar name,
+          their requests appear here. When you approve someone:
+        </p>
+        <ul className="text-secondary">
+          <li>A user account is created with a secure temporary password</li>
+          <li>They are automatically added as an approved member of your community</li>
+          <li>They receive an email with their login credentials</li>
+          <li>They can login immediately and access your community</li>
+        </ul>
       </div>
     </div>
   )

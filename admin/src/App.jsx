@@ -761,6 +761,7 @@ function UsersTab() {
   const [endDate, setEndDate] = useState('')
   const [appliedFilters, setAppliedFilters] = useState({ startDate: '', endDate: '', search: '', communityType: '' })
   const [loading, setLoading] = useState(true)
+  const [hoveredUser, setHoveredUser] = useState(null)
 
   useEffect(() => {
     loadUsers()
@@ -791,8 +792,8 @@ function UsersTab() {
       { label: 'Email', accessor: 'email' },
       { label: 'Role', accessor: (r) => r.role.replace('_', ' ') },
       { label: 'Network', accessor: (r) => r.communityType || '' },
-      { label: 'Communities', accessor: 'communityCount' },
-      { label: 'Active Access', accessor: 'activeAccessCount' },
+      { label: 'Community', accessor: (r) => r.communityName || 'None' },
+      { label: 'Active Subscriptions', accessor: (r) => r.activeSubscriptions.length },
       { label: 'Joined', accessor: (r) => new Date(r.createdAt).toLocaleDateString() }
     ], 'dak_users')
   }
@@ -852,14 +853,18 @@ function UsersTab() {
                 <th>User</th>
                 <th>Network</th>
                 <th>Role</th>
-                <th>Communities</th>
-                <th>Active Access</th>
+                <th>Community</th>
                 <th>Joined</th>
               </tr>
             </thead>
             <tbody>
               {users.map(user => (
-                <tr key={user.id}>
+                <tr
+                  key={user.id}
+                  onMouseEnter={() => setHoveredUser(user.id)}
+                  onMouseLeave={() => setHoveredUser(null)}
+                  style={{ position: 'relative' }}
+                >
                   <td>
                     <div className="user-cell">
                       <strong>{user.name || 'Unnamed'}</strong>
@@ -872,8 +877,33 @@ function UsersTab() {
                       {user.role.replace('_', ' ')}
                     </span>
                   </td>
-                  <td>{user.communityCount}</td>
-                  <td>{user.activeAccessCount}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span>{user.communityName || '—'}</span>
+                      {user.membershipCount > 1 && (
+                        <span
+                          className="status-badge pending"
+                          style={{ fontSize: '11px', padding: '2px 6px' }}
+                          title={`Warning: User has ${user.membershipCount} communities (should have only 1)`}
+                        >
+                          {user.membershipCount}
+                        </span>
+                      )}
+                    </div>
+                    {hoveredUser === user.id && user.activeSubscriptions.length > 0 && (
+                      <div className="user-subscriptions-tooltip">
+                        <div className="tooltip-header">Active Subscriptions:</div>
+                        {user.activeSubscriptions.map((sub, idx) => (
+                          <div key={idx} className="tooltip-item">
+                            <span className="tooltip-community">{sub.communityName}</span>
+                            <span className="tooltip-expiry">
+                              Expires: {new Date(sub.expiresAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td>{new Date(user.createdAt).toLocaleDateString()}</td>
                 </tr>
               ))}
