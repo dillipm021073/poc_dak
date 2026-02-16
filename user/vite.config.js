@@ -1,11 +1,18 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import noHostCheck from './vite-no-host-check.js'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), noHostCheck()],
   server: {
-    host: true,
-    port: 5173,
-    allowedHosts: ['all'] // Allow all hosts for tunneling services (ngrok, lhr.life, etc.)
+    host: '0.0.0.0',
+    port: 5176,
+    strictPort: false,
+    hmr: {
+      protocol: 'wss',
+      clientPort: 443,
+      host: 'localhost'
+    },
+    proxy: {}
   }
 })

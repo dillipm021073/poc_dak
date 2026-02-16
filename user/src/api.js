@@ -20,9 +20,13 @@ export function getToken() {
 
 // API helper
 async function api(endpoint, options = {}) {
+  // Always get fresh token to avoid timing issues
+  const currentToken = getToken();
+
   const headers = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'ngrok-skip-browser-warning': 'true', // Skip ngrok interstitial page
+    ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
     ...options.headers
   };
 
@@ -74,8 +78,12 @@ export const events = {
   getOne: (id) => api(`/events/${id}`),
   getMyCalendar: () => api('/events/calendar/my'),
   exportIcs: async (id) => {
+    const currentToken = getToken();
     const response = await fetch(`${API_URL}/events/${id}/ics`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
+      headers: {
+        'ngrok-skip-browser-warning': 'true',
+        ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {})
+      }
     });
     if (!response.ok) throw new Error('Failed to export calendar');
     const blob = await response.blob();

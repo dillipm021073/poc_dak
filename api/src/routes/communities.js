@@ -2,6 +2,38 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, '../../public/uploads/communities');
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const filename = `${req.params.id}-${req.body.type || 'image'}-${Date.now()}${ext}`;
+    cb(null, filename);
+  }
+});
+
+// File filter for images only
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only JPEG, PNG, and WebP are allowed.'), false);
+  }
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 // Get community by invite link (public - for QR/link onboarding)
 router.get('/invite/:link', async (req, res) => {
@@ -48,22 +80,27 @@ router.get('/my', authenticateToken, async (req, res) => {
   const pool = req.app.locals.pool;
 
   try {
+    // Query both community_memberships (for regular members) AND community_admins (for admins)
+    // Use DISTINCT to avoid duplicates if user is both admin and member
     const result = await pool.query(
-      `SELECT
+      `SELECT DISTINCT ON (c.id)
         c.id, c.name, c.community_type, c.logo_url, c.cover_image_url,
         c.head_of_institution, c.message_of_day, c.short_description,
-        cm.created_at as joined_at,
-        cm.status as membership_status,
+        COALESCE(ca.created_at, cm.created_at) as joined_at,
+        COALESCE(cm.status, 'approved') as membership_status,
         aca.access_expires_at,
         CASE
+          WHEN ca.user_id IS NOT NULL THEN TRUE
           WHEN aca.access_expires_at > NOW() THEN TRUE
           ELSE FALSE
-        END as has_active_access
-      FROM community_memberships cm
-      JOIN communities c ON c.id = cm.community_id
-      LEFT JOIN active_community_access aca ON aca.community_id = c.id AND aca.user_id = cm.user_id
-      WHERE cm.user_id = $1 AND c.status = 'active' AND cm.status != 'rejected'
-      ORDER BY cm.created_at DESC`,
+        END as has_active_access,
+        CASE WHEN ca.user_id IS NOT NULL THEN TRUE ELSE FALSE END as is_admin
+      FROM communities c
+      LEFT JOIN community_memberships cm ON c.id = cm.community_id AND cm.user_id = $1 AND cm.status != 'rejected'
+      LEFT JOIN community_admins ca ON c.id = ca.community_id AND ca.user_id = $1
+      LEFT JOIN active_community_access aca ON aca.community_id = c.id AND aca.user_id = $1
+      WHERE c.status = 'active' AND (cm.user_id IS NOT NULL OR ca.user_id IS NOT NULL)
+      ORDER BY c.id, COALESCE(ca.created_at, cm.created_at) DESC`,
       [req.user.userId]
     );
 
@@ -767,6 +804,108 @@ router.get('/:id/waiting-list', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Get community waiting list error:', err);
     res.status(500).json({ error: 'Failed to get waiting list' });
+  }
+});
+
+// Upload logo endpoint
+router.post('/:id/upload-logo', authenticateToken, upload.single('logo'), async (req, res) => {
+  const { id } = req.params;
+  const pool = req.app.locals.pool;
+
+  try {
+    // Verify admin authorization
+    const adminCheck = await pool.query(
+      `SELECT id FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [id, req.user.userId]
+    );
+
+    if (adminCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      // Delete uploaded file if unauthorized
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Get old logo to delete
+    const oldLogoResult = await pool.query(
+      `SELECT logo_url FROM communities WHERE id = $1`,
+      [id]
+    );
+
+    const oldLogoUrl = oldLogoResult.rows[0]?.logo_url;
+
+    // Update database with new logo URL
+    const logoUrl = `/uploads/communities/${req.file.filename}`;
+    await pool.query(
+      `UPDATE communities SET logo_url = $1, updated_at = NOW() WHERE id = $2`,
+      [logoUrl, id]
+    );
+
+    // Delete old logo file if it exists locally
+    if (oldLogoUrl && oldLogoUrl.startsWith('/uploads/')) {
+      const oldFilePath = path.join(__dirname, '../../public', oldLogoUrl);
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+      }
+    }
+
+    res.json({ logoUrl });
+  } catch (err) {
+    // Clean up uploaded file on error
+    if (req.file) fs.unlinkSync(req.file.path);
+    console.error('Upload logo error:', err);
+    res.status(500).json({ error: 'Failed to upload logo' });
+  }
+});
+
+// Upload cover image endpoint
+router.post('/:id/upload-cover', authenticateToken, upload.single('cover'), async (req, res) => {
+  const { id } = req.params;
+  const pool = req.app.locals.pool;
+
+  try {
+    const adminCheck = await pool.query(
+      `SELECT id FROM community_admins WHERE community_id = $1 AND user_id = $2`,
+      [id, req.user.userId]
+    );
+
+    if (adminCheck.rows.length === 0 && req.user.role !== 'platform_admin') {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const oldCoverResult = await pool.query(
+      `SELECT cover_image_url FROM communities WHERE id = $1`,
+      [id]
+    );
+
+    const oldCoverUrl = oldCoverResult.rows[0]?.cover_image_url;
+
+    const coverImageUrl = `/uploads/communities/${req.file.filename}`;
+    await pool.query(
+      `UPDATE communities SET cover_image_url = $1, updated_at = NOW() WHERE id = $2`,
+      [coverImageUrl, id]
+    );
+
+    if (oldCoverUrl && oldCoverUrl.startsWith('/uploads/')) {
+      const oldFilePath = path.join(__dirname, '../../public', oldCoverUrl);
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+      }
+    }
+
+    res.json({ coverImageUrl });
+  } catch (err) {
+    if (req.file) fs.unlinkSync(req.file.path);
+    console.error('Upload cover error:', err);
+    res.status(500).json({ error: 'Failed to upload cover image' });
   }
 });
 

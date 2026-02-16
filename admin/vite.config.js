@@ -5,7 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    port: 5173,
-    allowedHosts: ['all'] // Allow all hosts for tunneling services (ngrok, lhr.life, etc.)
+    strictPort: false,
+    hmr: {
+      clientPort: 443
+    }
   }
 })

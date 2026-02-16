@@ -26,6 +26,8 @@ services:
       PORT: 3000
     ports:
       - "3000:3000"
+    volumes:
+      - ./uploads:/app/public/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -34,6 +36,7 @@ services:
     build: ./admin
     environment:
       VITE_API_URL: http://localhost:3000/api
+      DANGEROUSLY_DISABLE_HOST_CHECK: "true"
     ports:
       - "3001:5173"
     depends_on:
@@ -43,6 +46,7 @@ services:
     build: ./institute
     environment:
       VITE_API_URL: http://localhost:3000/api
+      DANGEROUSLY_DISABLE_HOST_CHECK: "true"
     ports:
       - "3002:5173"
     depends_on:
@@ -52,6 +56,7 @@ services:
     build: ./user
     environment:
       VITE_API_URL: http://localhost:3000/api
+      DANGEROUSLY_DISABLE_HOST_CHECK: "true"
     ports:
       - "3003:5173"
     depends_on:

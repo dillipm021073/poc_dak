@@ -2,7 +2,22 @@
 // Lean MVP Specification v1.4 FINAL
 
 import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import api, { setToken, getToken } from './api'
+
+// Helper function to resolve image URLs
+const resolveImageUrl = (url) => {
+  if (!url) return '';
+  // If URL starts with /uploads/, prepend API URL
+  if (url.startsWith('/uploads/')) {
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    // Remove /api suffix if present
+    const baseUrl = API_URL.replace(/\/api$/, '');
+    return `${baseUrl}${url}`;
+  }
+  // Otherwise return as-is (full URLs)
+  return url;
+}
 
 // ============================================================================
 // COMMUNITY SYMBOL (Religion-specific)
@@ -51,6 +66,144 @@ const CommunitySymbol = ({ communityType, size = 24, color = 'var(--primary)' })
 }
 
 // ============================================================================
+// TOP NAVIGATION
+// ============================================================================
+
+function TopNav({ community, onLogout }) {
+  const location = useLocation()
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [showInviteLink, setShowInviteLink] = useState(false)
+
+  const navItems = [
+    { path: '/', icon: '📊', label: 'Dashboard' },
+    { path: '/settings', icon: '⚙️', label: 'Settings' },
+    { path: '/events', icon: '📅', label: 'Events' },
+    { path: '/streams', icon: '📺', label: 'Streams' },
+    { path: '/messages', icon: '💬', label: 'Messages' },
+    { path: '/supports', icon: '💰', label: 'Supports' },
+    { path: '/members', icon: '👥', label: 'Members' },
+    { path: '/waiting-list', icon: '📋', label: 'Waiting List' }
+  ]
+
+  return (
+    <nav className="top-nav">
+      <Link to="/" className="nav-brand">
+        <div className="community-avatar">
+          <CommunitySymbol communityType={community.communityType} size={20} color="white" />
+        </div>
+        <span>{community.name}</span>
+        <span className={`status-badge ${community.status}`}>{community.status}</span>
+      </Link>
+
+      <div className="nav-links">
+        {navItems.map(item => (
+          <Link
+            key={item.path}
+            to={item.path}
+            className={location.pathname === item.path ? 'active' : ''}
+          >
+            <span>{item.icon}</span>
+            <span>{item.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      <div className="nav-right">
+        <button className="btn-invite" onClick={() => setShowInviteLink(true)}>
+          Invite Link
+        </button>
+        <div className="nav-user-wrapper">
+          <div className="nav-user" onClick={() => setUserMenuOpen(!userMenuOpen)}>
+            <span>👤</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          {userMenuOpen && (
+            <div className="user-dropdown">
+              <button className="user-dropdown-item" onClick={() => { setShowChangePassword(true); setUserMenuOpen(false) }}>
+                Change Password
+              </button>
+              <button className="user-dropdown-item" onClick={onLogout}>
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
+      {showInviteLink && <InviteLinkModal community={community} onClose={() => setShowInviteLink(false)} />}
+    </nav>
+  )
+}
+
+// ============================================================================
+// MOBILE BOTTOM NAVIGATION
+// ============================================================================
+
+function MobileBottomNav() {
+  const location = useLocation()
+  return (
+    <nav className="mobile-bottom-nav">
+      <Link to="/" className={location.pathname === '/' ? 'active' : ''}>
+        <span>📊</span>
+        <span>Home</span>
+      </Link>
+      <Link to="/events" className={location.pathname === '/events' ? 'active' : ''}>
+        <span>📅</span>
+        <span>Events</span>
+      </Link>
+      <Link to="/messages" className={location.pathname === '/messages' ? 'active' : ''}>
+        <span>💬</span>
+        <span>Chat</span>
+      </Link>
+      <Link to="/members" className={location.pathname === '/members' ? 'active' : ''}>
+        <span>👥</span>
+        <span>Members</span>
+      </Link>
+      <Link to="/settings" className={location.pathname === '/settings' ? 'active' : ''}>
+        <span>⚙️</span>
+        <span>More</span>
+      </Link>
+    </nav>
+  )
+}
+
+// ============================================================================
+// INVITE LINK MODAL
+// ============================================================================
+
+function InviteLinkModal({ community, onClose }) {
+  const [copied, setCopied] = useState(false)
+  const inviteUrl = `${window.location.origin.replace(':3002', ':3003')}/join/${community.inviteLink}`
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(inviteUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Invite Link</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <p>Share this link with people to invite them to join your community:</p>
+        <div className="invite-link-display">
+          <code>{inviteUrl}</code>
+          <button className="btn btn-primary" onClick={copyToClipboard}>
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // MAIN APP
 // ============================================================================
 
@@ -58,7 +211,6 @@ function App() {
   const [user, setUser] = useState(null)
   const [community, setCommunity] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('dashboard')
 
   useEffect(() => {
     checkAuth()
@@ -128,22 +280,21 @@ function App() {
 
   return (
     <div className="app">
-      <Sidebar 
-        community={community} 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab}
-        onLogout={handleLogout}
-      />
+      <TopNav community={community} onLogout={handleLogout} />
       <main className="main-content">
-        {activeTab === 'dashboard' && <DashboardTab community={community} />}
-        {activeTab === 'settings' && <SettingsTab community={community} onUpdate={loadCommunity} />}
-        {activeTab === 'events' && <EventsTab community={community} />}
-        {activeTab === 'streams' && <StreamsTab community={community} />}
-        {activeTab === 'messages' && <MessagesTab community={community} />}
-        {activeTab === 'supports' && <SupportsTab community={community} />}
-        {activeTab === 'members' && <MembersTab community={community} />}
-        {activeTab === 'waiting-list' && <WaitingListTab community={community} />}
+        <Routes>
+          <Route path="/" element={<DashboardTab community={community} />} />
+          <Route path="/settings" element={<SettingsTab community={community} onUpdate={loadCommunity} />} />
+          <Route path="/events" element={<EventsTab community={community} />} />
+          <Route path="/streams" element={<StreamsTab community={community} />} />
+          <Route path="/messages" element={<MessagesTab community={community} />} />
+          <Route path="/supports" element={<SupportsTab community={community} />} />
+          <Route path="/members" element={<MembersTab community={community} />} />
+          <Route path="/waiting-list" element={<WaitingListTab community={community} />} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
       </main>
+      <MobileBottomNav />
     </div>
   )
 }
@@ -605,63 +756,6 @@ function ChangePasswordModal({ onClose }) {
 // SIDEBAR
 // ============================================================================
 
-function Sidebar({ community, activeTab, onTabChange, onLogout }) {
-  const [showChangePassword, setShowChangePassword] = useState(false)
-
-  const tabs = [
-    { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'settings', icon: '⚙️', label: 'Page Settings' },
-    { id: 'events', icon: '📅', label: 'Events' },
-    { id: 'streams', icon: '📺', label: 'Streams' },
-    { id: 'messages', icon: '💬', label: 'Messages' },
-    { id: 'supports', icon: '💰', label: 'Supports' },
-    { id: 'members', icon: '👥', label: 'Members' },
-    { id: 'waiting-list', icon: '📋', label: 'Waiting List' }
-  ]
-
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <div className="community-badge">
-          <div className="community-avatar">
-            <CommunitySymbol communityType={community.communityType} size={24} color="white" />
-          </div>
-          <div className="community-info">
-            <h3>{community.name}</h3>
-            <span className={`status-badge ${community.status}`}>{community.status}</span>
-          </div>
-        </div>
-      </div>
-
-      <nav className="sidebar-nav">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => onTabChange(tab.id)}
-          >
-            <span className="nav-icon">{tab.icon}</span>
-            <span className="nav-label">{tab.label}</span>
-          </button>
-        ))}
-      </nav>
-
-      <div className="sidebar-footer">
-        <div className="invite-link">
-          <label>Invite Link</label>
-          <code>{window.location.origin.replace(':3002', ':3003')}/join/{community.inviteLink}</code>
-        </div>
-        <button className="btn btn-outline btn-block" onClick={() => setShowChangePassword(true)}>
-          Change Password
-        </button>
-        <button className="btn btn-outline btn-block" onClick={onLogout} style={{ marginTop: 8 }}>
-          Sign Out
-        </button>
-      </div>
-      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
-    </aside>
-  )
-}
 
 // ============================================================================
 // DASHBOARD TAB
@@ -768,6 +862,7 @@ function SettingsTab({ community, onUpdate }) {
   })
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [uploading, setUploading] = useState({ logo: false, cover: false })
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -799,28 +894,65 @@ function SettingsTab({ community, onUpdate }) {
           <h3>Branding</h3>
 
           <div className="form-group">
-            <label>Logo URL</label>
+            <label>Logo Image</label>
             <input
-              type="url"
-              value={formData.logoUrl}
-              onChange={(e) => setFormData({...formData, logoUrl: e.target.value})}
-              placeholder="https://..."
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              onChange={async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  setUploading({ ...uploading, logo: true });
+                  try {
+                    const result = await api.communities.uploadLogo(community.id, file);
+                    setFormData({ ...formData, logoUrl: result.logoUrl });
+                    await onUpdate();
+                  } catch (err) {
+                    alert('Failed to upload logo: ' + err.message);
+                  } finally {
+                    setUploading({ ...uploading, logo: false });
+                    e.target.value = '';
+                  }
+                }
+              }}
+              disabled={uploading.logo}
             />
+            {uploading.logo && <p style={{ fontSize: '12px', color: 'var(--gray-600)', marginTop: '8px' }}>Uploading...</p>}
             {formData.logoUrl && (
-              <img src={formData.logoUrl} alt="Preview" className="image-preview" />
+              <img src={resolveImageUrl(formData.logoUrl)} alt="Logo Preview" className="image-preview" />
             )}
           </div>
 
           <div className="form-group">
-            <label>Cover Image URL</label>
+            <label>Cover Image</label>
             <input
-              type="url"
-              value={formData.coverImageUrl}
-              onChange={(e) => setFormData({...formData, coverImageUrl: e.target.value})}
-              placeholder="https://..."
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              onChange={async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  setUploading({ ...uploading, cover: true });
+                  try {
+                    const result = await api.communities.uploadCover(community.id, file);
+                    setFormData({ ...formData, coverImageUrl: result.coverImageUrl });
+                    await onUpdate();
+                  } catch (err) {
+                    alert('Failed to upload cover image: ' + err.message);
+                  } finally {
+                    setUploading({ ...uploading, cover: false });
+                    e.target.value = '';
+                  }
+                }
+              }}
+              disabled={uploading.cover}
             />
+            {uploading.cover && <p style={{ fontSize: '12px', color: 'var(--gray-600)', marginTop: '8px' }}>Uploading...</p>}
             {formData.coverImageUrl && (
-              <img src={formData.coverImageUrl} alt="Cover Preview" className="image-preview" style={{ maxHeight: '200px', width: '100%', objectFit: 'cover', borderRadius: '8px', marginTop: '12px' }} />
+              <img
+                src={resolveImageUrl(formData.coverImageUrl)}
+                alt="Cover Preview"
+                className="image-preview"
+                style={{ maxHeight: '200px', width: '100%', objectFit: 'cover', borderRadius: '8px', marginTop: '12px' }}
+              />
             )}
           </div>
         </div>

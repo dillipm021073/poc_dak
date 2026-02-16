@@ -5,6 +5,20 @@ import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate, Link, useLocation, useParams, useNavigate } from 'react-router-dom'
 import api, { setToken, getToken } from './api'
 
+// Helper function to resolve image URLs
+const resolveImageUrl = (url) => {
+  if (!url) return '';
+  // If URL starts with /uploads/, prepend API URL
+  if (url.startsWith('/uploads/')) {
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    // Remove /api suffix if present
+    const baseUrl = API_URL.replace(/\/api$/, '');
+    return `${baseUrl}${url}`;
+  }
+  // Otherwise return as-is (full URLs)
+  return url;
+}
+
 // ============================================================================
 // ICONS & UI COMPONENTS
 // ============================================================================
@@ -598,7 +612,7 @@ function RegisterPage({ onLogin }) {
     <div className="auth-page"><div className="auth-card">
       <div className="auth-header"><DakLogo size={48} /><h1>Join {community.name}</h1></div>
       <div className="community-preview">
-        {community.logoUrl && <img src={community.logoUrl} alt="" className="community-logo" />}
+        {community.logoUrl && <img src={resolveImageUrl(community.logoUrl)} alt="" className="community-logo" />}
         <p className="confirmation-message">{community.confirmationMessage}</p>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
@@ -694,7 +708,7 @@ function CommunityCard({ community, onClick }) {
   return (
     <div className="community-card" onClick={onClick}>
       <div className="community-card-header">
-        {community.logoUrl ? <img src={community.logoUrl} alt="" className="community-logo" /> : (
+        {community.logoUrl ? <img src={resolveImageUrl(community.logoUrl)} alt="" className="community-logo" /> : (
           <div className="community-logo-placeholder"><CommunitySymbol communityType={community.communityType} size={28} color="white" /></div>
         )}
         <div className="community-info"><h3>{community.name}</h3><span className="community-type">{community.communityType}</span></div>
@@ -983,7 +997,7 @@ function CommunityPage() {
         {/* Community Info */}
         <div className="sidebar-community-info">
           {community.logoUrl ? (
-            <img src={community.logoUrl} alt={community.name} className="sidebar-community-logo" />
+            <img src={resolveImageUrl(community.logoUrl)} alt={community.name} className="sidebar-community-logo" />
           ) : (
             <div className="sidebar-logo-placeholder">
               <CommunitySymbol communityType={community.communityType} size={40} />
@@ -1006,7 +1020,7 @@ function CommunityPage() {
         {/* Cover Image - Below Access Info */}
         {community.coverImageUrl && community.coverImageUrl.trim() !== '' && (
           <div className="sidebar-cover-image-bottom">
-            <img src={community.coverImageUrl} alt={`${community.name} cover`} className="sidebar-cover-img" />
+            <img src={resolveImageUrl(community.coverImageUrl)} alt={`${community.name} cover`} className="sidebar-cover-img" />
           </div>
         )}
       </div>

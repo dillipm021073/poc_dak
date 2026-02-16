@@ -20,6 +20,7 @@ export function getToken() {
 async function api(endpoint, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true', // Skip ngrok interstitial page
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers
   };

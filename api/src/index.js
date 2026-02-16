@@ -4,6 +4,8 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 // Route imports
@@ -29,9 +31,23 @@ const pool = new Pool({
 // Make pool available to routes
 app.locals.pool = pool;
 
-// Middleware
-app.use(cors());
+// Middleware - CORS configuration for ngrok and local development
+app.use(cors({
+  origin: true, // Allow all origins (for development with ngrok)
+  credentials: true, // Allow cookies and authorization headers
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning']
+}));
 app.use(express.json());
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '../public/uploads/communities');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // Rate limiting placeholder (for production)
 // app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));

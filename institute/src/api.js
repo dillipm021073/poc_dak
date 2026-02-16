@@ -18,9 +18,13 @@ export function getToken() {
 }
 
 async function api(endpoint, options = {}) {
+  // Always get fresh token to avoid timing issues
+  const currentToken = getToken();
+
   const headers = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'ngrok-skip-browser-warning': 'true', // Skip ngrok interstitial page
+    ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
     ...options.headers
   };
 
@@ -60,7 +64,52 @@ export const communities = {
   getAnalytics: (id) => api(`/communities/${id}/analytics`),
   create: (data) => api('/communities', { method: 'POST', body: JSON.stringify(data) }),
   getWaitingList: (id) => api(`/communities/${id}/waiting-list`),
-  approveWaitingListEntry: (communityId, waitingListId) => api(`/communities/${communityId}/waiting-list/${waitingListId}/approve`, { method: 'POST' })
+  approveWaitingListEntry: (communityId, waitingListId) => api(`/communities/${communityId}/waiting-list/${waitingListId}/approve`, { method: 'POST' }),
+
+  uploadLogo: async (id, file) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    formData.append('type', 'logo');
+
+    const response = await fetch(`${API_URL}/communities/${id}/upload-logo`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'ngrok-skip-browser-warning': 'true'
+        // Don't set Content-Type - browser will set it with boundary
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Upload failed');
+    }
+
+    return response.json();
+  },
+
+  uploadCover: async (id, file) => {
+    const formData = new FormData();
+    formData.append('cover', file);
+    formData.append('type', 'cover');
+
+    const response = await fetch(`${API_URL}/communities/${id}/upload-cover`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${getToken()}`,
+        'ngrok-skip-browser-warning': 'true'
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Upload failed');
+    }
+
+    return response.json();
+  }
 };
 
 // Events
