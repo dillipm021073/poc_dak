@@ -277,27 +277,27 @@ router.post('/mock-complete/:paymentId', authenticateToken, async (req, res) => 
       const current = existingAccess.rows[0];
       const currentExpiry = new Date(current.access_expires_at);
       const currentCredit = parseFloat(current.credit_amount) || 0;
-      const currentDaysRemaining = Math.max(0, Math.ceil((currentExpiry - now) / msPerDay));
 
-      // If user already has credit > 0 or >= 90 days remaining, entire payment goes to credit
-      if (currentCredit > 0 || currentDaysRemaining >= 90) {
-        newExpiresAt = currentExpiry > now ? currentExpiry : now;
-        // Cap display at 90 days, keep actual expiry
-        if (newExpiresAt > maxExpiry) {
-          newExpiresAt = maxExpiry;
-        }
-        totalCreditAmount = parseFloat((currentCredit + paymentAmount).toFixed(2));
+      // IMPORTANT: Always extend from current expiry (if future) OR today, whichever is later
+      // This ensures users never lose days they paid for
+      const baseDate = currentExpiry > now ? currentExpiry : now;
+      const calculatedExpiry = new Date(baseDate.getTime() + (daysGranted * msPerDay));
+
+      // Calculate days that would exceed the 90-day cap
+      const daysFromNowToCalculated = Math.ceil((calculatedExpiry - now) / msPerDay);
+
+      if (daysFromNowToCalculated > 90) {
+        // Cap access at 90 days from now
+        newExpiresAt = maxExpiry;
+
+        // Convert excess days to dollar credit
+        const excessDays = daysFromNowToCalculated - 90;
+        const excessAmount = (excessDays / daysGranted) * paymentAmount;
+        totalCreditAmount = parseFloat((currentCredit + excessAmount).toFixed(2));
       } else {
-        // Rolling extension - add days to current expiry (if not expired) or from now
-        const baseDate = currentExpiry > now ? currentExpiry : now;
-        newExpiresAt = new Date(baseDate.getTime() + (daysGranted * msPerDay));
-        totalCreditAmount = currentCredit + calculateCreditAmount(paymentAmount);
-
-        // Apply 90-day cap: excess access converted to dollar credit
-        if (newExpiresAt > maxExpiry) {
-          newExpiresAt = maxExpiry;
-          // Any overshoot stays as dollar credit (already calculated from payment)
-        }
+        // All paid days fit within 90-day cap
+        newExpiresAt = calculatedExpiry;
+        totalCreditAmount = currentCredit; // No excess, keep existing credit
       }
 
       await pool.query(
@@ -307,13 +307,22 @@ router.post('/mock-complete/:paymentId', authenticateToken, async (req, res) => 
         [newExpiresAt, totalCreditAmount, current.id]
       );
     } else {
-      // New access record
-      newExpiresAt = new Date(now.getTime() + (daysGranted * msPerDay));
-      totalCreditAmount = calculateCreditAmount(paymentAmount);
+      // New access record - start from today + granted days
+      const calculatedExpiry = new Date(now.getTime() + (daysGranted * msPerDay));
+      const daysFromNowToCalculated = Math.ceil((calculatedExpiry - now) / msPerDay);
 
-      // Apply 90-day cap
-      if (newExpiresAt > maxExpiry) {
+      if (daysFromNowToCalculated > 90) {
+        // Cap access at 90 days from now
         newExpiresAt = maxExpiry;
+
+        // Convert excess days to dollar credit
+        const excessDays = daysFromNowToCalculated - 90;
+        const excessAmount = (excessDays / daysGranted) * paymentAmount;
+        totalCreditAmount = parseFloat(excessAmount.toFixed(2));
+      } else {
+        // All paid days fit within 90-day cap
+        newExpiresAt = calculatedExpiry;
+        totalCreditAmount = 0; // No excess for first payment within cap
       }
 
       await pool.query(

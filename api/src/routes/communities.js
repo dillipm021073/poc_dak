@@ -650,19 +650,23 @@ router.post('/:id/members/:userId/set-access', authenticateToken, async (req, re
         return res.status(400).json({ error: 'accessUntil must be a valid future date' });
       }
     } else if (daysToGrant && Number.isInteger(daysToGrant) && daysToGrant > 0 && daysToGrant <= 365) {
-      // Rolling extension: add days to current expiry if not expired, otherwise from now
+      // Rolling extension: ALWAYS add days to current expiry (if not expired) OR today, whichever is later
+      // This ensures members never lose days when access is extended
       const existing = await pool.query(
         `SELECT access_expires_at FROM active_community_access WHERE user_id = $1 AND community_id = $2`,
         [userId, id]
       );
       const now = new Date();
       let baseDate = now;
+
       if (existing.rows.length > 0) {
         const currentExpiry = new Date(existing.rows[0].access_expires_at);
+        // If current expiry is in the future, extend from that date; otherwise extend from today
         if (currentExpiry > now) {
           baseDate = currentExpiry;
         }
       }
+
       newExpiresAt = new Date(baseDate.getTime() + (daysToGrant * 24 * 60 * 60 * 1000));
     } else {
       return res.status(400).json({ error: 'Provide accessUntil (ISO date) or daysToGrant (1-365)' });
